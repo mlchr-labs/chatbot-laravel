@@ -64,7 +64,7 @@ class PanelIdorTest extends TestCase
             'temperature' => 0.5,
         ]);
 
-        $this->assertContains($response->getStatusCode(), [403, 404]);
+        $response->assertNotFound();
         $response->assertDontSee('segredo do cliente', false);
 
         $fresh = $this->chatbot->fresh();

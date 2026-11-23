@@ -88,7 +88,7 @@ class ChatbotCrudTest extends TestCase
 
         $this->actingAs($this->user)->get(route('chatbots.show', $chatbot))
             ->assertOk()
-            ->assertSee('data-chatbot="'.$chatbot->public_key.'"', false)
+            ->assertSee(e('data-chatbot="'.$chatbot->public_key.'"'), false)
             ->assertSee(e('<script src="'.url('widget.js').'"'), false);
     }
 

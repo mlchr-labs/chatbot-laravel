@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Chatbot;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 class ChatbotPolicy
 {
@@ -13,7 +14,7 @@ class ChatbotPolicy
         return true;
     }
 
-    public function view(User $user, Chatbot $chatbot): bool
+    public function view(User $user, Chatbot $chatbot): Response
     {
         return $this->owns($user, $chatbot);
     }
@@ -23,23 +24,25 @@ class ChatbotPolicy
         return true;
     }
 
-    public function update(User $user, Chatbot $chatbot): bool
+    public function update(User $user, Chatbot $chatbot): Response
     {
         return $this->owns($user, $chatbot);
     }
 
-    public function delete(User $user, Chatbot $chatbot): bool
+    public function delete(User $user, Chatbot $chatbot): Response
     {
         return $this->owns($user, $chatbot);
     }
 
-    public function rotateKey(User $user, Chatbot $chatbot): bool
+    public function rotateKey(User $user, Chatbot $chatbot): Response
     {
         return $this->owns($user, $chatbot);
     }
 
-    private function owns(User $user, Chatbot $chatbot): bool
+    private function owns(User $user, Chatbot $chatbot): Response
     {
-        return $chatbot->user_id !== null && $chatbot->user_id === $user->id;
+        return $chatbot->user_id !== null && $chatbot->user_id === $user->id
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 }

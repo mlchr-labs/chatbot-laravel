@@ -1,0 +1,99 @@
+services:
+    webapp:
+        build:
+            context: .docker/app
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP:-1000}'
+                MYSQL_CLIENT: mariadb-client
+        image: 'laravel-nginx-fpm'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${APP_PORT:-8080}:80'
+            - '${REVERB_EXPOSED_PORT:-8090}:8090'
+        environment:
+            WWWUSER: '${WWWUSER:-1000}'
+            LARAVEL_SAIL: 1
+        volumes:
+            - '.docker/app/nginx.conf:/etc/nginx/nginx.conf'
+            - '.docker/app/supervisord.conf:/etc/supervisord.conf'
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            - webapp_mariadb
+            - webapp_redis
+            - webapp_mailpit
+    webapp_embeddings:
+        image: '${EMBEDDINGS_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.7}'
+        platform: '${CONTAINER_PLATFORM:-linux/amd64}'
+        ports:
+            - "8081:80"
+        environment:
+            MODEL_ID: intfloat/multilingual-e5-small
+        volumes:
+            - 'embeddings_data:/data'
+        networks:
+            - sail
+    webapp_mariadb:
+        image: 'mariadb:11'
+        ports:
+            - '${DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        volumes:
+            - 'webapp_mariadb:/var/lib/mysql'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - healthcheck.sh
+                - '--connect'
+                - '--innodb_initialized'
+            retries: 3
+            timeout: 5s
+    webapp_redis:
+        image: 'redis:alpine'
+        ports:
+            - '${REDIS_PORT:-6379}:6379'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - redis-cli
+                - ping
+            retries: 3
+            timeout: 5s
+    webapp_mailpit:
+        image: 'axllent/mailpit:latest'
+        ports:
+            - '1025:1025'
+            - '8025:8025'
+        networks:
+            - sail
+    webapp_qdrant:
+        image: 'qdrant/qdrant:v1.20.2'
+        networks:
+            - sail
+        ports:
+         - '6333:6333'
+        volumes:
+         - 'qdrant_data:/qdrant/storage'
+networks:
+    sail:
+        driver: bridge
+volumes:
+    webapp_mariadb:
+        driver: local
+    qdrant_data:
+        driver: local
+    embeddings_data:
+        driver: local

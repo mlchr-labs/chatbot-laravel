@@ -7,6 +7,10 @@
     })"
     class="space-y-6"
 >
+    <x-ui.alert type="warning">
+        O conteúdo enviado aqui é usado para responder visitantes públicos e pode ser exposto por eles nas conversas. Não envie dados confidenciais.
+    </x-ui.alert>
+
     <x-ui.card>
         <x-slot:header>Enviar documentos</x-slot:header>
 

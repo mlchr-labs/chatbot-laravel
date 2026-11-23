@@ -225,7 +225,7 @@ return [
             'nice' => 0,
         ],
 
-        // Reserved for the chat reply jobs (phase 5).
+        // Chat reply jobs (GenerateReply).
         'supervisor-chat' => [
             'connection' => 'redis',
             'queue' => ['chat'],

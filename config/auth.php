@@ -42,6 +42,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Stateless guard for the embeddable widget: resolves a WidgetVisitor from a Bearer token.
+        // Registered with Auth::viaRequest('widget', ...) in AppServiceProvider.
+        'widget' => [
+            'driver' => 'widget',
+        ],
     ],
 
     /*

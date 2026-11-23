@@ -24,6 +24,12 @@ class KnowledgeSource extends Model
         return $this->belongsTo(Chatbot::class);
     }
 
+    /** Private disk path of the intermediate plain text produced by the extraction step. */
+    public function extractedTextPath(): string
+    {
+        return $this->disk_path.'.extracted.txt';
+    }
+
     public function chunks(): HasMany
     {
         return $this->hasMany(KnowledgeChunk::class);

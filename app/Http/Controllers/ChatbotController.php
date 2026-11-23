@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\KnowledgeSourceStatus;
 use App\Enums\LlmProvider;
 use App\Http\Requests\StoreChatbotRequest;
 use App\Http\Requests\UpdateChatbotRequest;
+use App\Http\Resources\KnowledgeSourceResource;
 use App\Models\Chatbot;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,9 +56,15 @@ class ChatbotController extends Controller
             ->limit(10)
             ->get();
 
+        $sources = $chatbot->knowledgeSources()
+            ->where('status', '!=', KnowledgeSourceStatus::Deleting->value)
+            ->orderByDesc('id')
+            ->get();
+
         return view('chatbots.show', [
             'chatbot' => $chatbot,
             'conversations' => $conversations,
+            'sources' => KnowledgeSourceResource::collection($sources)->resolve(),
             'snippet' => '<script src="'.url('widget.js').'" data-chatbot="'.$chatbot->public_key.'" async></script>',
         ]);
     }

@@ -210,6 +210,34 @@ return [
             'timeout' => 60,
             'nice' => 0,
         ],
+
+        // Document ingestion (extract, chunk, embed) and deletion.
+        'supervisor-knowledge' => [
+            'connection' => 'redis',
+            'queue' => ['knowledge'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 1,
+            'timeout' => 300,
+            'nice' => 0,
+        ],
+
+        // Reserved for the chat reply jobs (phase 5).
+        'supervisor-chat' => [
+            'connection' => 'redis',
+            'queue' => ['chat'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 1,
+            'timeout' => 120,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [
@@ -219,11 +247,23 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-knowledge' => [
+                'maxProcesses' => 3,
+            ],
+            'supervisor-chat' => [
+                'maxProcesses' => 5,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'supervisor-knowledge' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-chat' => [
+                'maxProcesses' => 1,
             ],
         ],
     ],

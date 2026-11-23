@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\KnowledgeSourceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('home');
@@ -16,7 +17,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::scopeBindings()->group(function () {
         Route::resource('chatbots.conversations', ConversationController::class)
             ->only(['index', 'show']);
-    });
 
-    // Phase 3: chatbots/{chatbot}/sources/{source} (scopeBindings) goes here.
+        // {knowledgeSource} matches the Chatbot::knowledgeSources() relation used for scoping.
+        Route::resource('chatbots.sources', KnowledgeSourceController::class)
+            ->parameters(['sources' => 'knowledgeSource'])
+            ->only(['index', 'store', 'destroy']);
+    });
 });

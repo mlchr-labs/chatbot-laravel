@@ -95,7 +95,7 @@
             <x-ui.card>
                 <x-slot:header>Domínios permitidos</x-slot:header>
                 @if (empty($chatbot->allowed_domains))
-                    <p class="text-sm text-gray-600">Nenhum domínio cadastrado. Adicione os sites autorizados na <a class="text-indigo-600 underline" href="{{ route('chatbots.edit', $chatbot) }}">edição do chatbot</a>.</p>
+                    <p class="text-sm text-gray-600">Nenhum domínio cadastrado: o widget fica bloqueado até você autorizar pelo menos um site. Adicione os sites autorizados na <a class="text-indigo-600 underline" href="{{ route('chatbots.edit', $chatbot) }}">edição do chatbot</a>.</p>
                 @else
                     <ul class="flex flex-wrap gap-2">
                         @foreach ($chatbot->allowed_domains as $domain)

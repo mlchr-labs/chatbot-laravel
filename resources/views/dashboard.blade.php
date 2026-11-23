@@ -15,7 +15,7 @@
             Quando você criar o primeiro chatbot, as métricas e conversas aparecem nesta página.
         </p>
         <div class="mt-6">
-            <x-ui.button :href="Route::has('chatbots.index') ? route('chatbots.index') : '#'">Ir para Chatbots</x-ui.button>
+            <x-ui.button :href="route('chatbots.index')">Ir para Chatbots</x-ui.button>
         </div>
     </x-ui.card>
 @endsection

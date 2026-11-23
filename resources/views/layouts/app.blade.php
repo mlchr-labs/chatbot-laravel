@@ -2,7 +2,7 @@
     $nav = [
         ['label' => 'Dashboard', 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'),
             'icon' => 'M2.25 12l8.954-8.955a1.126 1.126 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25'],
-        ['label' => 'Chatbots', 'href' => Route::has('chatbots.index') ? route('chatbots.index') : '#', 'active' => request()->routeIs('chatbots.*'),
+        ['label' => 'Chatbots', 'href' => route('chatbots.index'), 'active' => request()->routeIs('chatbots.*'),
             'icon' => 'M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM12 20.25c4.97 0 9-3.694 9-8.25S16.97 3.75 12 3.75 3 7.444 3 12c0 1.6.5 3.09 1.36 4.35L3.75 20.25l4.2-.84A9.9 9.9 0 0 0 12 20.25Z'],
     ];
     $user = auth()->user();

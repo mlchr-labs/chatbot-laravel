@@ -71,9 +71,9 @@
             </x-ui.card>
         </section>
 
-        {{-- Base de conhecimento (fase 3) --}}
+        {{-- Base de conhecimento --}}
         <section x-show="tab === 'knowledge'" x-cloak class="mt-6" role="tabpanel">
-            <x-ui.empty-state title="Base de conhecimento" description="O envio de documentos (PDF, TXT, MD e HTML) chega na próxima etapa." />
+            @include('chatbots._knowledge')
         </section>
 
         {{-- Widget --}}

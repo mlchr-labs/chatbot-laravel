@@ -7,6 +7,7 @@ use App\Enums\LlmProvider;
 use App\Http\Requests\StoreChatbotRequest;
 use App\Http\Requests\UpdateChatbotRequest;
 use App\Http\Resources\KnowledgeSourceResource;
+use App\Jobs\Knowledge\PurgeChatbotKnowledge;
 use App\Models\Chatbot;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -92,7 +93,12 @@ class ChatbotController extends Controller
     {
         Gate::authorize('delete', $chatbot);
 
+        // Captured before the row goes away: the purge job only needs these identifiers.
+        $purge = new PurgeChatbotKnowledge($chatbot->ulid, $chatbot->user_id);
+
         $chatbot->delete();
+
+        dispatch($purge);
 
         return redirect()->route('chatbots.index')->with('status', 'Chatbot excluído.');
     }

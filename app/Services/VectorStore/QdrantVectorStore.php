@@ -115,6 +115,15 @@ class QdrantVectorStore implements VectorStore
         ])->throw();
     }
 
+    public function deleteByChatbot(string $chatbotId): void
+    {
+        $this->assertTenant($chatbotId);
+
+        $this->request()->post("/collections/{$this->collection}/points/delete?wait=true", [
+            'filter' => ['must' => [$this->match('chatbot_id', $chatbotId)]],
+        ])->throw();
+    }
+
     /**
      * @return array{key: string, match: array{value: string}}
      */

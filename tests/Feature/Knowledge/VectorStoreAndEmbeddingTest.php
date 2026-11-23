@@ -65,6 +65,7 @@ class VectorStoreAndEmbeddingTest extends TestCase
             fn () => $this->store()->search('', [0.1], 1),
             fn () => $this->store()->search('  ', [0.1], 1),
             fn () => $this->store()->deleteBySource('', 'src'),
+            fn () => $this->store()->deleteByChatbot(' '),
         ] as $call) {
             try {
                 $call();
@@ -77,12 +78,22 @@ class VectorStoreAndEmbeddingTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_delete_by_chatbot_sends_a_tenant_filtered_delete(): void
+    {
+        Http::fake(['*' => Http::response(['result' => true])]);
+
+        $this->store()->deleteByChatbot('01chatbotulid');
+
+        Http::assertSent(fn (Request $r) => $r->url() === 'http://qdrant.test:6333/collections/knowledge/points/delete?wait=true'
+            && $r['filter'] === ['must' => [['key' => 'chatbot_id', 'match' => ['value' => '01chatbotulid']]]]);
+    }
+
     public function test_the_contract_has_no_unfiltered_search(): void
     {
         $methods = array_map(fn ($m) => $m->getName(), (new \ReflectionClass(VectorStore::class))->getMethods());
         sort($methods);
 
-        $this->assertSame(['deleteBySource', 'ensureCollection', 'search', 'upsert'], $methods);
+        $this->assertSame(['deleteByChatbot', 'deleteBySource', 'ensureCollection', 'search', 'upsert'], $methods);
         $this->assertSame('chatbotId', (new \ReflectionMethod(VectorStore::class, 'search'))->getParameters()[0]->getName());
         $this->assertFalse((new \ReflectionMethod(VectorStore::class, 'search'))->getParameters()[0]->isOptional());
     }

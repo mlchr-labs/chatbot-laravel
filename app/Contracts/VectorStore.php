@@ -28,4 +28,7 @@ interface VectorStore
     public function search(string $chatbotId, array $vector, int $limit, ?float $scoreThreshold = null): array;
 
     public function deleteBySource(string $chatbotId, string $sourceId): void;
+
+    /** Removes every point of one chatbot (used when the chatbot is deleted). */
+    public function deleteByChatbot(string $chatbotId): void;
 }

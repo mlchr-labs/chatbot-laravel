@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\Knowledge\PurgeChatbotKnowledge;
 use App\Models\Chatbot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
 
 class ChatbotCrudTest extends TestCase
@@ -153,10 +155,16 @@ class ChatbotCrudTest extends TestCase
     {
         $chatbot = Chatbot::factory()->for($this->user)->create();
 
+        Bus::fake();
+
         $this->actingAs($this->user)->delete(route('chatbots.destroy', $chatbot))
             ->assertRedirect(route('chatbots.index'));
 
         $this->assertModelMissing($chatbot);
+
+        // The row is gone, so the purge carries the identifiers captured before deleting.
+        Bus::assertDispatched(PurgeChatbotKnowledge::class, fn (PurgeChatbotKnowledge $job) => $job->chatbotUlid === $chatbot->ulid
+            && $job->userId === $this->user->id);
     }
 
     public function test_rotate_key_changes_public_key(): void

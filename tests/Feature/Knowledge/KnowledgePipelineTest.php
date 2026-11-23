@@ -241,4 +241,62 @@ class KnowledgePipelineTest extends TestCase
         $this->assertDatabaseCount('knowledge_chunks', 0);
         Http::assertNothingSent();
     }
+
+    public function test_vectors_are_removed_when_the_source_is_deleted_while_a_batch_is_in_flight(): void
+    {
+        $source = $this->sourceWithText('conteúdo');
+        $source->update(['status' => KnowledgeSourceStatus::Embedding]);
+        KnowledgeChunk::factory()->for($source, 'source')->create(['position' => 0]);
+        KnowledgeChunk::factory()->for($source, 'source')->create(['position' => 1]);
+        config(['knowledge.embed_batch_size' => 1]);
+
+        Http::fake(function (Request $request) use ($source) {
+            if (str_ends_with($request->url(), '/embed')) {
+                return Http::response(array_map(fn () => [0.1, 0.2, 0.3, 0.4], $request['inputs']));
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/collections/knowledge')) {
+                return Http::response(['status' => 'error'], 404);
+            }
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/points')) {
+                // The owner hits "delete" while the upsert is running.
+                KnowledgeSource::query()->whereKey($source->id)->update(['status' => KnowledgeSourceStatus::Deleting->value]);
+            }
+
+            return Http::response(['result' => true, 'status' => 'ok']);
+        });
+
+        EmbedKnowledgeChunks::dispatchSync($source);
+
+        $upserts = Http::recorded(fn (Request $r) => $r->method() === 'PUT' && str_contains($r->url(), '/points'));
+        $this->assertCount(1, $upserts, 'stops after the first batch');
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/points/delete?wait=true')
+            && $r['filter']['must'][1] === ['key' => 'source_id', 'match' => ['value' => $source->ulid]]);
+        $this->assertSame(KnowledgeSourceStatus::Deleting, $source->fresh()->status);
+    }
+
+    public function test_vectors_are_removed_when_the_source_row_is_gone_mid_batch(): void
+    {
+        $source = $this->sourceWithText('conteúdo');
+        $source->update(['status' => KnowledgeSourceStatus::Embedding]);
+        KnowledgeChunk::factory()->for($source, 'source')->create(['position' => 0]);
+
+        Http::fake(function (Request $request) use ($source) {
+            if (str_ends_with($request->url(), '/embed')) {
+                return Http::response(array_map(fn () => [0.1, 0.2, 0.3, 0.4], $request['inputs']));
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/collections/knowledge')) {
+                return Http::response(['status' => 'error'], 404);
+            }
+            if ($request->method() === 'PUT' && str_contains($request->url(), '/points')) {
+                KnowledgeChunk::query()->where('knowledge_source_id', $source->id)->delete();
+                KnowledgeSource::query()->whereKey($source->id)->delete();
+            }
+
+            return Http::response(['result' => true, 'status' => 'ok']);
+        });
+
+        EmbedKnowledgeChunks::dispatchSync($source);
+
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/points/delete?wait=true'));
+    }
 }

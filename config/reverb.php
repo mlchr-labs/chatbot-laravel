@@ -36,7 +36,9 @@ return [
             'options' => [
                 'tls' => [],
             ],
-            'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
+            // Size cap of the HTTP requests Reverb receives, which includes every broadcast this app sends it.
+            // Widget events stay far below it (see ReplyCompleted), so the default is kept.
+            'max_request_size' => (int) env('REVERB_MAX_REQUEST_SIZE', 10_000),
             'scaling' => [
                 'enabled' => env('REVERB_SCALING_ENABLED', false),
                 'channel' => env('REVERB_SCALING_CHANNEL', 'reverb'),
@@ -85,15 +87,18 @@ return [
                 'allowed_origins' => ['*'],
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),
                 'activity_timeout' => env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
-                'max_connections' => env('REVERB_APP_MAX_CONNECTIONS'),
+                // Concurrent websocket connections for this app (one per open widget). Empty means unlimited.
+                'max_connections' => env('REVERB_APP_MAX_CONNECTIONS', 1000) === null ? null : (int) env('REVERB_APP_MAX_CONNECTIONS', 1000),
                 'max_message_size' => env('REVERB_APP_MAX_MESSAGE_SIZE', 10_000),
                 'max_channels_per_connection' => env('REVERB_APP_MAX_CHANNELS_PER_CONNECTION', 1000),
-                'accept_client_events_from' => env('REVERB_APP_ACCEPT_CLIENT_EVENTS_FROM', 'members'),
+                // The widget only listens: visitors must not whisper to each other. "all", "members" or "none".
+                'accept_client_events_from' => env('REVERB_APP_ACCEPT_CLIENT_EVENTS_FROM', 'none'),
+                // Per connection message rate (client to server only; server broadcasts are not counted).
                 'rate_limiting' => [
-                    'enabled' => env('REVERB_APP_RATE_LIMITING_ENABLED', false),
-                    'max_attempts' => env('REVERB_APP_RATE_LIMIT_MAX_ATTEMPTS', 60),
-                    'decay_seconds' => env('REVERB_APP_RATE_LIMIT_DECAY_SECONDS', 60),
-                    'terminate_on_limit' => env('REVERB_APP_RATE_LIMIT_TERMINATE', false),
+                    'enabled' => (bool) env('REVERB_APP_RATE_LIMITING_ENABLED', true),
+                    'max_attempts' => (int) env('REVERB_APP_RATE_LIMIT_MAX_ATTEMPTS', 60),
+                    'decay_seconds' => (int) env('REVERB_APP_RATE_LIMIT_DECAY_SECONDS', 60),
+                    'terminate_on_limit' => (bool) env('REVERB_APP_RATE_LIMIT_TERMINATE', false),
                 ],
             ],
         ],

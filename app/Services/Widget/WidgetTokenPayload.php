@@ -8,5 +8,6 @@ final readonly class WidgetTokenPayload
         public string $conversationUlid,
         public string $chatbotUlid,
         public int $expiresAt,
+        public string $keyVersion,
     ) {}
 }

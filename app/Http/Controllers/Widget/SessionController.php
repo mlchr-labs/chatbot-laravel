@@ -34,7 +34,7 @@ class SessionController extends Controller
                 'last_message_at' => now(),
             ]);
 
-        $token = $tokens->issue($conversation->ulid, $chatbot->ulid);
+        $token = $tokens->issue($conversation->ulid, $chatbot->ulid, $chatbot->public_key);
 
         $reverb = (array) config('broadcasting.connections.reverb');
         $options = (array) ($reverb['options'] ?? []);

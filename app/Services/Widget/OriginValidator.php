@@ -8,9 +8,12 @@ use Illuminate\Http\Request;
 
 class OriginValidator
 {
+    /** Hosts allowed to use http:// as the Origin scheme. */
+    private const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+
     /**
      * Normalized "host" (or "host:port" when the port is not the scheme default) of the Origin header,
-     * or null when absent or not a plain http(s) origin.
+     * or null when absent, not an http(s) origin, or plain http on a host that is not localhost/127.0.0.1.
      */
     public function hostOf(Request $request): ?string
     {
@@ -30,6 +33,12 @@ class OriginValidator
         }
 
         $host = HostnameNormalizer::normalize($parts['host']);
+
+        // Plain http is only accepted for local development hosts.
+        if ($scheme === 'http' && ! in_array($host, self::LOCAL_HOSTS, true)) {
+            return null;
+        }
+
         $port = $parts['port'] ?? null;
         $isDefault = $port === null || ($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80);
 

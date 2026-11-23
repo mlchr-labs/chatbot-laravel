@@ -107,4 +107,14 @@ class ChatbotLimitsTest extends TestCase
         $this->actingAs($this->user)->put(route('chatbots.update', $chatbot), $this->payload(['model' => 'custom-model', 'remove_api_key' => 1]))
             ->assertSessionHasErrors('model');
     }
+
+    public function test_api_key_is_not_flashed_back_after_a_validation_error(): void
+    {
+        $response = $this->actingAs($this->user)->from(route('chatbots.create'))
+            ->post(route('chatbots.store'), $this->payload(['name' => '', 'api_key' => 'sk-should-not-flash']));
+
+        $response->assertSessionHasErrors('name');
+        $this->assertNull(session()->getOldInput('api_key'));
+        $this->assertSame('openai', session()->getOldInput('provider'));
+    }
 }

@@ -42,7 +42,7 @@ abstract class WidgetTestCase extends TestCase
     protected function conversationWithToken(Chatbot $chatbot, ?string $visitor = 'visitor-1'): array
     {
         $conversation = Conversation::factory()->create(['chatbot_id' => $chatbot->id, 'visitor_id' => $visitor]);
-        $token = app(WidgetTokenService::class)->issue($conversation->ulid, $chatbot->ulid)->value;
+        $token = app(WidgetTokenService::class)->issue($conversation->ulid, $chatbot->ulid, $chatbot->public_key)->value;
 
         return [$conversation, $token];
     }

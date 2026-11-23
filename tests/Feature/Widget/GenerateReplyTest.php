@@ -70,7 +70,7 @@ class GenerateReplyTest extends WidgetTestCase
         $this->assertLessThan(4, count($deltas));
 
         $reply = Message::where('role', 'assistant')->firstOrFail();
-        Event::assertDispatched(ReplyCompleted::class, fn ($e) => $e->messageUlid === $reply->ulid && $e->content === 'Olá, tudo bem? Sim');
+        Event::assertDispatched(ReplyCompleted::class, fn ($e) => $e->messageUlid === $reply->ulid);
         Event::assertNotDispatched(ReplyFailed::class);
 
         $this->assertTrue(Cache::lock(MessageController::lockKey($conversation->id), 5)->get(), 'lock must be free');
@@ -137,7 +137,7 @@ class GenerateReplyTest extends WidgetTestCase
         $events = [
             [new ReplyStarted('abc'), 'reply.started', []],
             [new ReplyToken('abc', 'oi'), 'reply.token', ['delta' => 'oi']],
-            [new ReplyCompleted('abc', 'm1', 'texto'), 'reply.completed', ['id' => 'm1', 'content' => 'texto']],
+            [new ReplyCompleted('abc', 'm1'), 'reply.completed', ['id' => 'm1']],
             [new ReplyFailed('abc', 'erro'), 'reply.failed', ['message' => 'erro']],
         ];
 

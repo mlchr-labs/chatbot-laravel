@@ -29,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Never flash these into the session after a validation error (Laravel's defaults plus api_key).
+        $exceptions->dontFlash(['api_key', 'current_password', 'password', 'password_confirmation']);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

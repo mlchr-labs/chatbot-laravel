@@ -8,7 +8,7 @@
 <body style="font-family: sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem;">
     <h1>Página de demonstração</h1>
     <p>Conteúdo qualquer da página host. O chat deve aparecer no canto inferior.</p>
-    <p>Apenas para desenvolvimento local. Exclua ou proteja este arquivo em produção.</p>
+    <p>Apenas para desenvolvimento local: servida por uma rota que só existe com APP_ENV=local.</p>
 
     <!--
       Como testar:
@@ -16,7 +16,7 @@
       2. Substitua pk_REPLACE_ME pela public_key do chatbot (aba Widget no painel).
       3. No chatbot, adicione `localhost:8080` (APP_PORT) em "domínios permitidos",
          porque o header Origin desta página será http://localhost:8080.
-      4. Abra http://localhost:8080/widget-demo.html
+      4. Abra http://localhost:8080/widget-demo (rota disponível só com APP_ENV=local)
     -->
     <script src="/widget.js" data-chatbot="pk_REPLACE_ME" async></script>
 </body>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ThrottleAuthForms;
 use Laravel\Fortify\Features;
 
 return [
@@ -101,7 +102,7 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    'middleware' => ['web', ThrottleAuthForms::class],
 
     /*
     |--------------------------------------------------------------------------
@@ -118,6 +119,21 @@ return [
         'login' => 'login',
         'two-factor' => 'two-factor',
         'passkeys' => 'passkeys',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Registration and Password Reset Throttling
+    |--------------------------------------------------------------------------
+    |
+    | Fortify has no limiter key for these routes, so App\Http\Middleware\ThrottleAuthForms applies the
+    | "register" and "forgot-password" limiters (see FortifyServiceProvider) to them. Attempts per minute per IP.
+    |
+    */
+
+    'throttle' => [
+        'register_per_minute' => (int) env('REGISTER_THROTTLE_PER_MINUTE', 5),
+        'forgot_password_per_minute' => (int) env('FORGOT_PASSWORD_THROTTLE_PER_MINUTE', 5),
     ],
 
     /*

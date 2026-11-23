@@ -2,8 +2,12 @@
 
 namespace Tests\Feature\Widget;
 
+use App\Http\Controllers\Widget\MessageController;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Services\Widget\WidgetTokenService;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 
 class SessionTest extends WidgetTestCase
 {
@@ -190,5 +194,50 @@ class SessionTest extends WidgetTestCase
         $this->open(['public_key' => $chatbot->public_key])->assertHeader('Access-Control-Allow-Origin', '*');
 
         $this->get('/login', ['Origin' => self::ORIGIN])->assertHeaderMissing('Access-Control-Allow-Origin');
+    }
+
+    public function test_origin_must_be_https_except_for_local_hosts(): void
+    {
+        $key = fn (array $domains) => $this->chatbot(['allowed_domains' => $domains])->public_key;
+
+        // http on a real host is refused even when the host is allowed.
+        $this->open(['public_key' => $key(['site.example.com'])], 'http://site.example.com')->assertForbidden();
+        $this->open(['public_key' => $key(['site.example.com'])], 'https://site.example.com')->assertOk();
+
+        // localhost and 127.0.0.1 may use http (or https).
+        $this->open(['public_key' => $key(['localhost'])], 'http://localhost')->assertOk();
+        $this->open(['public_key' => $key(['localhost:3000'])], 'http://localhost:3000')->assertOk();
+        $this->open(['public_key' => $key(['127.0.0.1:8000'])], 'http://127.0.0.1:8000')->assertOk();
+        $this->open(['public_key' => $key(['localhost'])], 'https://localhost')->assertOk();
+
+        // Lookalikes are not local.
+        $this->open(['public_key' => $key(['localhost.evil.com'])], 'http://localhost.evil.com')->assertForbidden();
+        $this->open(['public_key' => $key(['127.0.0.1.nip.io'])], 'http://127.0.0.1.nip.io')->assertForbidden();
+    }
+
+    public function test_rotating_the_public_key_revokes_issued_tokens(): void
+    {
+        $chatbot = $this->chatbot();
+        [$conversation, $token] = $this->conversationWithToken($chatbot);
+        $post = fn () => $this->postJson(
+            "/api/widget/conversations/{$conversation->ulid}/messages",
+            ['content' => 'oi'],
+            $this->headers($token),
+        );
+        Queue::fake();
+
+        $post()->assertStatus(202);
+        // The reply lock of the first message would otherwise answer 409.
+        Cache::lock(MessageController::lockKey($conversation->id))->forceRelease();
+
+        $chatbot->rotatePublicKey();
+
+        $post()->assertUnauthorized();
+
+        // A token issued after the rotation works.
+        $fresh = app(WidgetTokenService::class)
+            ->issue($conversation->ulid, $chatbot->ulid, $chatbot->fresh()->public_key)->value;
+        $this->postJson("/api/widget/conversations/{$conversation->ulid}/messages", ['content' => 'oi'], $this->headers($fresh))
+            ->assertStatus(202);
     }
 }

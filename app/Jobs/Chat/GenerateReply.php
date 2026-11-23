@@ -61,7 +61,7 @@ class GenerateReply implements ShouldQueue
             $reply = $responder->respond($conversation, $message, $buffer->add(...));
             $buffer->flush();
 
-            ReplyCompleted::dispatch($ulid, $reply->ulid, $reply->content);
+            ReplyCompleted::dispatch($ulid, $reply->ulid);
         } catch (MissingApiKeyException $e) {
             $this->replyFailed($ulid, $conversation->chatbot_id, $e, 'Este assistente ainda não está configurado.');
         } catch (LlmException $e) {

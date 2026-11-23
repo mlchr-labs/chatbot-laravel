@@ -76,7 +76,7 @@ class GeminiClient extends HttpLlmClient
         $model = $this->model($request);
 
         // The model name is user supplied and ends up in the path.
-        if (! preg_match('/^[A-Za-z0-9._-]+$/', $model)) {
+        if (! preg_match('/^[A-Za-z0-9._-]+\z/', $model)) {
             throw new LlmException('Nome de modelo inválido.');
         }
 

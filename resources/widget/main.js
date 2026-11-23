@@ -41,7 +41,7 @@ const script = document.currentScript || document.querySelector('script[data-cha
             onStarted: () => ui.startReply(),
             onToken: (delta) => ui.appendToken(delta),
             onCompleted: (e) => {
-                ui.finishReply(e?.content);
+                ui.finishReply(typeof e?.content === 'string' ? e.content : undefined);
                 endReply();
             },
             onFailed: (message) => {

@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('home');
 
+// Widget playground. Local only: the route does not exist in any other environment.
+if (app()->isLocal()) {
+    Route::get('/widget-demo', fn () => response()->file(resource_path('widget/demo.html')))->name('widget.demo');
+}
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
 

@@ -56,6 +56,14 @@ class EmbedKnowledgeChunks extends KnowledgeSourceJob
                 ],
             ])->all());
 
+            // The owner may have deleted the source while this batch was in flight. The delete job could have
+            // run before the upsert above, which would leave these vectors orphaned: remove them and stop.
+            if (! $this->stillExists()) {
+                $store->deleteBySource($chatbotUlid, $this->source->ulid);
+
+                return;
+            }
+
             KnowledgeChunk::query()->whereKey($chunks->modelKeys())->update(['embedded_at' => now()]);
         }
 
@@ -64,6 +72,14 @@ class EmbedKnowledgeChunks extends KnowledgeSourceJob
             'error' => null,
             'chunks_count' => $this->source->chunks()->count(),
         ]);
+    }
+
+    /** False when the source is being deleted or its row is already gone. */
+    private function stillExists(): bool
+    {
+        $fresh = $this->source->fresh();
+
+        return $fresh !== null && $fresh->status !== KnowledgeSourceStatus::Deleting;
     }
 
     /** @return Collection<int, KnowledgeChunk> */

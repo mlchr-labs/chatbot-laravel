@@ -80,7 +80,7 @@ class MessageTest extends WidgetTestCase
         $chatbot = $this->chatbot();
         $other = $this->chatbot();
         [$conversation] = $this->conversationWithToken($chatbot);
-        $forged = app(WidgetTokenService::class)->issue($conversation->ulid, $other->ulid)->value;
+        $forged = app(WidgetTokenService::class)->issue($conversation->ulid, $other->ulid, $other->public_key)->value;
 
         $this->send($conversation->ulid, $forged)->assertUnauthorized();
     }

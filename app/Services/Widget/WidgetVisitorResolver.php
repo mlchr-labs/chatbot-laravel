@@ -27,6 +27,11 @@ class WidgetVisitorResolver
             return null;
         }
 
+        // Rotating the public key revokes every token issued under the previous one.
+        if (! hash_equals(WidgetTokenService::keyVersion((string) $conversation->chatbot->public_key), $payload->keyVersion)) {
+            return null;
+        }
+
         return new WidgetVisitor($conversation, $conversation->chatbot);
     }
 }

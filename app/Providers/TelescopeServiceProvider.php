@@ -36,6 +36,11 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
      */
     protected function hideSensitiveRequestDetails(): void
     {
+        // Credentials are hidden everywhere, local included: they would otherwise be stored in plain text.
+        Telescope::hideRequestParameters(['api_key', 'password', 'password_confirmation']);
+
+        Telescope::hideRequestHeaders(['x-api-key', 'x-goog-api-key', 'api-key', 'authorization', 'cookie']);
+
         if ($this->app->environment('local')) {
             return;
         }

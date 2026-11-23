@@ -207,9 +207,12 @@ export function buildUi({ name, theme, onSend, onOpen, onClose }) {
             hideTyping();
             if (raf) cancelAnimationFrame(raf);
             raf = 0;
-            if (typeof finalText === 'string') {
+            // reply.completed carries only the message id: the streamed text is the final text. If a
+            // payload with "content" ever comes back, it is still taken as authoritative.
+            const text = typeof finalText === 'string' ? finalText : streamText;
+            if (text !== '') {
                 if (!streamEl) streamEl = bubble('assistant');
-                streamEl.replaceChildren(renderMarkdownToFragment(finalText)); // autoritativo
+                streamEl.replaceChildren(renderMarkdownToFragment(text));
             }
             streamEl = null;
             streamText = '';

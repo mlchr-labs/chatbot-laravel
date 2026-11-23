@@ -7,6 +7,7 @@ use App\Contracts\VectorStore;
 use App\Services\Embeddings\TeiEmbeddingClient;
 use App\Services\VectorStore\QdrantVectorStore;
 use App\Support\TextChunker;
+use App\Support\TextExtractor;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,6 +27,11 @@ class KnowledgeServiceProvider extends ServiceProvider
             collection: (string) config('services.qdrant.collection'),
             dimensions: (int) config('services.embeddings.dimensions'),
             cache: $app->make(Repository::class),
+        ));
+
+        $this->app->bind(TextExtractor::class, fn () => new TextExtractor(
+            pdftotextPath: config('knowledge.pdftotext_path'),
+            pdfMaxPages: (int) config('knowledge.pdf_max_pages'),
         ));
 
         $this->app->bind(TextChunker::class, fn () => new TextChunker(

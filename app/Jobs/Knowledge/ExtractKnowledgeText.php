@@ -30,6 +30,10 @@ class ExtractKnowledgeText extends KnowledgeSourceJob
             throw new KnowledgeProcessingException('Nenhum texto foi encontrado no documento. PDFs escaneados (imagens) não são suportados.');
         }
 
+        if (mb_strlen($text) > (int) config('knowledge.max_extracted_chars')) {
+            throw new KnowledgeProcessingException('O documento tem texto demais para ser indexado. Divida em arquivos menores.');
+        }
+
         // Hand-off to the next job goes through the private disk, not the queue payload.
         $this->disk()->put($this->source->extractedTextPath(), $text);
     }

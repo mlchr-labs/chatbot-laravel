@@ -33,6 +33,10 @@ class ChunkKnowledgeText extends KnowledgeSourceJob
             throw new KnowledgeProcessingException('Nenhum conteúdo utilizável foi encontrado no documento.');
         }
 
+        if (count($pieces) > (int) config('knowledge.max_chunks_per_source')) {
+            throw new KnowledgeProcessingException('O documento gera trechos demais para ser indexado. Divida em arquivos menores.');
+        }
+
         $template = new KnowledgeChunk;
 
         DB::transaction(function () use ($pieces, $template): void {

@@ -21,6 +21,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // {knowledgeSource} matches the Chatbot::knowledgeSources() relation used for scoping.
         Route::resource('chatbots.sources', KnowledgeSourceController::class)
             ->parameters(['sources' => 'knowledgeSource'])
-            ->only(['index', 'store', 'destroy']);
+            ->only(['index', 'destroy']);
+
+        Route::post('chatbots/{chatbot}/sources', [KnowledgeSourceController::class, 'store'])
+            ->middleware('throttle:knowledge-uploads')
+            ->name('chatbots.sources.store');
     });
 });

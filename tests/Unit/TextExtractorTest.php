@@ -139,4 +139,18 @@ class TextExtractorTest extends TestCase
 
         $this->assertSame('Hello PDF', $text);
     }
+
+    public function test_pdf_page_limit_is_passed_to_pdftotext(): void
+    {
+        // Stand-in binary that prints its own arguments, so no real PDF tooling is needed.
+        $bin = $this->file('fake-pdftotext', "#!/bin/sh\necho \"ARGS:$*\"\n");
+        chmod($bin, 0755);
+        $pdf = $this->file('a.pdf', "%PDF-1.4\n");
+
+        $limited = (new TextExtractor($bin, 500))->extract($pdf, KnowledgeFileType::Pdf);
+        $this->assertStringStartsWith('ARGS:-l 500 '.$pdf, $limited);
+
+        $unlimited = (new TextExtractor($bin, 0))->extract($pdf, KnowledgeFileType::Pdf);
+        $this->assertStringStartsWith('ARGS:'.$pdf, $unlimited);
+    }
 }

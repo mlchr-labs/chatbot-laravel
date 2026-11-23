@@ -37,6 +37,13 @@ class AppServiceProvider extends ServiceProvider
         Auth::viaRequest('widget', fn (Request $request) => $this->app->make(WidgetVisitorResolver::class)->resolve($request));
 
         $this->configureWidgetRateLimiting();
+        $this->configurePanelRateLimiting();
+    }
+
+    private function configurePanelRateLimiting(): void
+    {
+        RateLimiter::for('knowledge-uploads', fn (Request $request) => Limit::perMinute((int) config('knowledge.uploads_per_minute_user'))
+            ->by('user:'.($request->user()?->getAuthIdentifier() ?? IpHasher::hash($request->ip()))));
     }
 
     private function configureWidgetRateLimiting(): void

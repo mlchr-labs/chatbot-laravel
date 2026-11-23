@@ -9,7 +9,10 @@ use Throwable;
 
 class TextExtractor
 {
-    public function __construct(private readonly ?string $pdftotextPath = null) {}
+    public function __construct(
+        private readonly ?string $pdftotextPath = null,
+        private readonly int $pdfMaxPages = 0,
+    ) {}
 
     public function extract(string $absolutePath, KnowledgeFileType $type): string
     {
@@ -25,12 +28,18 @@ class TextExtractor
     public function fromPdf(string $path): string
     {
         try {
-            return $this->toUtf8(Pdf::getText($path, $this->pdftotextPath ?: null));
+            return $this->toUtf8(Pdf::getText($path, $this->pdftotextPath ?: null, $this->pdfOptions()));
         } catch (Throwable $e) {
             report($e);
 
             throw new KnowledgeProcessingException('Não foi possível ler o PDF.', previous: $e);
         }
+    }
+
+    /** @return list<string> pdftotext options; "-l N" stops after page N (0 means no limit). */
+    private function pdfOptions(): array
+    {
+        return $this->pdfMaxPages > 0 ? ['-l '.$this->pdfMaxPages] : [];
     }
 
     public function fromHtml(string $html): string

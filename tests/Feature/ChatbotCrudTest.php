@@ -21,6 +21,7 @@ class ChatbotCrudTest extends TestCase
 
         $this->withoutVite();
         $this->user = User::factory()->create();
+        config(['llm.platform_models.anthropic' => ['claude-test']]);
     }
 
     /** @return array<string, mixed> */

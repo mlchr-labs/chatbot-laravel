@@ -5,6 +5,7 @@ namespace Tests\Feature\Llm;
 use App\Enums\LlmProvider;
 use App\Models\Chatbot;
 use App\Services\LLM\Exceptions\MissingApiKeyException;
+use App\Services\LLM\Exceptions\ModelNotAllowedException;
 use App\Services\LLM\LlmClientFactory;
 use App\Services\LLM\LlmRequest;
 use App\Services\LLM\Providers\AnthropicClient;
@@ -61,5 +62,47 @@ class LlmClientFactoryTest extends TestCase
         $this->expectException(MissingApiKeyException::class);
 
         app(LlmClientFactory::class)->for($this->chatbot(LlmProvider::Anthropic));
+    }
+
+    public function test_platform_key_rejects_a_model_outside_the_allowlist(): void
+    {
+        config(['llm.providers.openai.api_key' => 'platform-key', 'llm.platform_models.openai' => ['gpt-6-luna']]);
+        $chatbot = $this->chatbot(LlmProvider::OpenAi)->forceFill(['model' => 'gpt-expensive']);
+
+        try {
+            app(LlmClientFactory::class)->for($chatbot);
+            $this->fail('Expected the model to be refused.');
+        } catch (ModelNotAllowedException $e) {
+            // Handled by GenerateReply like a missing key ("not configured").
+            $this->assertInstanceOf(MissingApiKeyException::class, $e);
+        }
+
+        $this->assertInstanceOf(
+            OpenAiCompatibleClient::class,
+            app(LlmClientFactory::class)->for($chatbot->forceFill(['model' => 'gpt-6-luna'])),
+        );
+    }
+
+    public function test_platform_allowlist_defaults_to_the_provider_default_model(): void
+    {
+        config(['llm.providers.anthropic.api_key' => 'k', 'llm.providers.anthropic.model' => 'claude-default',
+            'llm.platform_models.anthropic' => []]);
+
+        $this->assertInstanceOf(
+            AnthropicClient::class,
+            app(LlmClientFactory::class)->for($this->chatbot(LlmProvider::Anthropic)->forceFill(['model' => 'claude-default'])),
+        );
+
+        $this->expectException(ModelNotAllowedException::class);
+        app(LlmClientFactory::class)->for($this->chatbot(LlmProvider::Anthropic)->forceFill(['model' => 'other']));
+    }
+
+    public function test_byok_model_is_not_restricted_by_the_allowlist(): void
+    {
+        config(['llm.platform_models.openai' => ['gpt-6-luna']]);
+
+        $client = app(LlmClientFactory::class)->for($this->chatbot(LlmProvider::OpenAi, 'my-key')->forceFill(['model' => 'anything-goes']));
+
+        $this->assertInstanceOf(OpenAiCompatibleClient::class, $client);
     }
 }

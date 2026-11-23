@@ -48,9 +48,18 @@ class AppServiceProvider extends ServiceProvider
             ->by($ip($request))
             ->response($tooMany('Muitas requisições. Tente novamente em instantes.')));
 
-        RateLimiter::for('widget-sessions', fn (Request $request) => Limit::perMinute((int) config('widget.limits.sessions_per_minute_ip'))
-            ->by($ip($request))
-            ->response($tooMany('Muitas conexões. Tente novamente em instantes.')));
+        RateLimiter::for('widget-sessions', function (Request $request) use ($tooMany, $ip) {
+            $slowDown = $tooMany('Muitas conexões. Tente novamente em instantes.');
+
+            return [
+                Limit::perMinute((int) config('widget.limits.sessions_per_minute_ip'))
+                    ->by($ip($request))
+                    ->response($slowDown),
+                Limit::perDay((int) config('widget.limits.sessions_per_day_ip'))
+                    ->by('ip-day:'.IpHasher::hash($request->ip()))
+                    ->response($tooMany('Limite diário de conexões atingido. Tente novamente amanhã.')),
+            ];
+        });
 
         RateLimiter::for('widget-broadcast-auth', fn (Request $request) => Limit::perMinute((int) config('widget.limits.broadcast_auth_per_minute_ip'))
             ->by($ip($request))
@@ -71,6 +80,13 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perDay((int) config('widget.limits.messages_per_day_chatbot'))
                     ->by('chatbot:'.$visitor?->chatbot->id)
                     ->response($tooMany('Este assistente atingiu o limite diário de mensagens. Tente novamente mais tarde.')),
+                // Everything an owner's chatbots spend on the platform key shares one daily budget.
+                Limit::perDay((int) config('widget.limits.messages_per_day_user'))
+                    ->by('user:'.$visitor?->chatbot->user_id)
+                    ->response($tooMany('Este assistente atingiu o limite diário de mensagens. Tente novamente mais tarde.')),
+                Limit::perDay((int) config('widget.limits.messages_per_day_ip_chatbot'))
+                    ->by('ip-day:'.$visitor?->chatbot->id.':'.IpHasher::hash($request->ip()))
+                    ->response($tooMany('Você atingiu o limite diário de mensagens deste assistente. Tente novamente amanhã.')),
             ];
         });
     }

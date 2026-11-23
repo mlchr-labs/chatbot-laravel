@@ -30,9 +30,10 @@ class ChatbotController extends Controller
 
     public function create(): View
     {
-        Gate::authorize('create', Chatbot::class);
+        $limit = Gate::inspect('create', Chatbot::class);
 
         return view('chatbots.create', [
+            'limitMessage' => $limit->denied() ? $limit->message() : null,
             'chatbot' => new Chatbot(['provider' => LlmProvider::OpenAi, 'temperature' => 0.7, 'is_active' => true]),
             'providers' => LlmProvider::cases(),
         ]);
@@ -40,7 +41,10 @@ class ChatbotController extends Controller
 
     public function store(StoreChatbotRequest $request): RedirectResponse
     {
-        Gate::authorize('create', Chatbot::class);
+        // The create page explains the limit in pt-BR, so a denial goes back there instead of a bare 403.
+        if (Gate::denies('create', Chatbot::class)) {
+            return redirect()->route('chatbots.create');
+        }
 
         $chatbot = $request->user()->chatbots()->create($request->chatbotAttributes());
 

@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Enums\LlmProvider;
+use App\Models\Chatbot;
+use App\Rules\ChatbotModel;
 use App\Support\HostnameNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,7 +35,7 @@ abstract class ChatbotRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'system_prompt' => ['nullable', 'string', 'max:8000'],
             'provider' => ['required', Rule::enum(LlmProvider::class)],
-            'model' => ['required', 'string', 'max:100'],
+            'model' => ['required', 'string', 'max:'.ChatbotModel::MAX_LENGTH, new ChatbotModel($this->input('provider'), $this->usesOwnApiKey())],
             'temperature' => ['required', 'numeric', 'between:0,2'],
             'welcome_message' => ['nullable', 'string', 'max:500'],
             'api_key' => ['nullable', 'string', 'max:500'],
@@ -49,6 +51,22 @@ abstract class ChatbotRequest extends FormRequest
                 },
             ],
         ];
+    }
+
+    /** Whether the chatbot will run on its own key after this request is applied (new, kept or removed). */
+    private function usesOwnApiKey(): bool
+    {
+        if ($this->boolean('remove_api_key')) {
+            return false;
+        }
+
+        if (filled($this->input('api_key'))) {
+            return true;
+        }
+
+        $chatbot = $this->route('chatbot');
+
+        return $chatbot instanceof Chatbot && $chatbot->hasApiKey();
     }
 
     /**

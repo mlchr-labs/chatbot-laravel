@@ -6,6 +6,7 @@ use App\Enums\LlmProvider;
 use App\Models\Chatbot;
 use App\Services\LLM\Contracts\LlmClient;
 use App\Services\LLM\Exceptions\MissingApiKeyException;
+use App\Services\LLM\Exceptions\ModelNotAllowedException;
 use App\Services\LLM\Providers\AnthropicClient;
 use App\Services\LLM\Providers\GeminiClient;
 use App\Services\LLM\Providers\OpenAiCompatibleClient;
@@ -13,9 +14,12 @@ use Illuminate\Contracts\Config\Repository;
 
 class LlmClientFactory
 {
-    public function __construct(private readonly Repository $config) {}
+    public function __construct(
+        private readonly Repository $config,
+        private readonly PlatformModels $platformModels,
+    ) {}
 
-    /** @throws MissingApiKeyException when neither the chatbot nor the platform has a key */
+    /** @throws MissingApiKeyException when neither the chatbot nor the platform has a key, or the platform key is not allowed for the model */
     public function for(Chatbot $chatbot): LlmClient
     {
         $provider = $chatbot->provider;
@@ -26,6 +30,13 @@ class LlmClientFactory
 
         if ($apiKey === '') {
             throw MissingApiKeyException::forProvider($provider->label());
+        }
+
+        // The platform key only pays for allowlisted models. Checked here too, not just on save.
+        if (! $chatbot->hasApiKey()
+            && filled($chatbot->model)
+            && ! $this->platformModels->isAllowed($provider, (string) $chatbot->model)) {
+            throw ModelNotAllowedException::forModel($provider->label(), (string) $chatbot->model);
         }
 
         $common = [

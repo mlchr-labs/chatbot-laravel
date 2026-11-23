@@ -19,9 +19,15 @@ class ChatbotPolicy
         return $this->owns($user, $chatbot);
     }
 
-    public function create(User $user): bool
+    public function create(User $user): Response
     {
-        return true;
+        $max = (int) config('plans.max_chatbots_per_user');
+
+        if ($user->chatbots()->count() >= $max) {
+            return Response::deny("Você atingiu o limite de {$max} chatbots. Exclua um chatbot para criar outro.");
+        }
+
+        return Response::allow();
     }
 
     public function update(User $user, Chatbot $chatbot): Response

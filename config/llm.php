@@ -1,5 +1,8 @@
 <?php
 
+// Comma separated env list -> array of trimmed, non empty strings.
+$csv = static fn (string $value): array => array_values(array_filter(array_map('trim', explode(',', $value)), static fn (string $v): bool => $v !== ''));
+
 return [
 
     // Seconds without receiving data (read timeout while streaming) and to open the connection.
@@ -50,6 +53,17 @@ return [
             'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
             'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
         ],
+    ],
+
+    // Models a chatbot may use while it runs on the PLATFORM key (no key of its own). Bring-your-own-key
+    // chatbots are not restricted by this list. Each provider defaults to its default model above.
+    // Override with a comma separated list, e.g. OPENAI_PLATFORM_MODELS=gpt-6-luna,gpt-6-mini.
+    'platform_models' => [
+        'openai' => $csv((string) env('OPENAI_PLATFORM_MODELS', '')) ?: [env('OPENAI_MODEL', 'gpt-6-luna')],
+        'groq' => $csv((string) env('GROQ_PLATFORM_MODELS', '')) ?: [env('GROQ_MODEL', 'llama-3.3-70b-versatile')],
+        'deepseek' => $csv((string) env('DEEPSEEK_PLATFORM_MODELS', '')) ?: [env('DEEPSEEK_MODEL', 'deepseek-v4-flash')],
+        'anthropic' => $csv((string) env('ANTHROPIC_PLATFORM_MODELS', '')) ?: [env('ANTHROPIC_MODEL', 'claude-haiku-5-5')],
+        'gemini' => $csv((string) env('GEMINI_PLATFORM_MODELS', '')) ?: [env('GEMINI_MODEL', 'gemini-3.5-flash-lite')],
     ],
 
     'chat' => [

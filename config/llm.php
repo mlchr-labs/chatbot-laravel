@@ -1,0 +1,63 @@
+<?php
+
+return [
+
+    // Seconds without receiving data (read timeout while streaming) and to open the connection.
+    'timeout' => (int) env('LLM_TIMEOUT', 60),
+    'connect_timeout' => (int) env('LLM_CONNECT_TIMEOUT', 5),
+
+    // Used when a chatbot does not set its own limit. Anthropic requires max_tokens on every request.
+    'max_tokens' => (int) env('LLM_MAX_TOKENS', 1024),
+
+    'providers' => [
+        // Chat Completions. "model" is the default used when a chatbot has no model set.
+        'openai' => [
+            'api_key' => env('OPENAI_API_KEY'),
+            'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+            'model' => env('OPENAI_MODEL', 'gpt-6-luna'),
+            'max_tokens_param' => 'max_completion_tokens',
+            // Reasoning models may reject a custom temperature, so it is not sent unless enabled.
+            'send_temperature' => (bool) env('OPENAI_SEND_TEMPERATURE', false),
+            'stream_usage' => true,
+        ],
+        'groq' => [
+            'api_key' => env('GROQ_API_KEY'),
+            'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+            'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+            'max_tokens_param' => 'max_tokens',
+            'send_temperature' => true,
+            // Usage arrives in x_groq.usage of the last chunk, parsed by the client.
+            'stream_usage' => false,
+        ],
+        'deepseek' => [
+            'api_key' => env('DEEPSEEK_API_KEY'),
+            'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
+            'max_tokens_param' => 'max_tokens',
+            'send_temperature' => (bool) env('DEEPSEEK_SEND_TEMPERATURE', false),
+            'stream_usage' => true,
+        ],
+        // Messages API. Current Claude models reject temperature, top_p and top_k, so none is sent.
+        'anthropic' => [
+            'api_key' => env('ANTHROPIC_API_KEY'),
+            'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'),
+            'model' => env('ANTHROPIC_MODEL', 'claude-haiku-5-5'),
+            'version' => env('ANTHROPIC_VERSION', '2026-10-21'),
+        ],
+        // streamGenerateContent with alt=sse.
+        'gemini' => [
+            'api_key' => env('GEMINI_API_KEY'),
+            'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+            'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+        ],
+    ],
+
+    'chat' => [
+        // Last N messages of the conversation sent to the model.
+        'history_limit' => (int) env('CHAT_HISTORY_LIMIT', 10),
+        'top_k' => (int) env('CHAT_TOP_K', 6),
+        // Cosine score floor for retrieved chunks. Tune it per embedding model.
+        'score_threshold' => (float) env('CHAT_SCORE_THRESHOLD', 0.5),
+    ],
+
+];

@@ -38,12 +38,19 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureWidgetRateLimiting();
         $this->configurePanelRateLimiting();
+        $this->configureSandboxRateLimiting();
     }
 
     private function configurePanelRateLimiting(): void
     {
         RateLimiter::for('knowledge-uploads', fn (Request $request) => Limit::perMinute((int) config('knowledge.uploads_per_minute_user'))
             ->by('user:'.($request->user()?->getAuthIdentifier() ?? IpHasher::hash($request->ip()))));
+    }
+
+    private function configureSandboxRateLimiting(): void
+    {
+        RateLimiter::for('sandbox-page', fn (Request $request) => Limit::perMinute((int) config('widget.limits.sandbox_page_per_minute_ip'))
+            ->by('ip:'.IpHasher::hash($request->ip())));
     }
 
     private function configureWidgetRateLimiting(): void

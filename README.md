@@ -170,7 +170,7 @@ The repository has no documented Docker-free path. The app needs MariaDB, Redis,
 
 Local requirements: PHP 8.3 or newer, Composer, Node, pnpm and poppler `pdftotext` (path in `PDFTOTEXT_PATH`).
 
-`composer.json` has a `setup` script that installs dependencies, creates `.env`, generates the key, runs migrations and builds the front end. It calls `npm install` and `npm run build`, so if you use pnpm, run the steps one by one instead.
+`composer setup` installs dependencies, creates `.env`, generates the key, runs migrations and builds the front end with pnpm.
 
 `composer dev` runs `php artisan dev`.
 

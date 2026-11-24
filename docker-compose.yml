@@ -33,8 +33,13 @@ services:
         platform: '${CONTAINER_PLATFORM:-linux/amd64}'
         ports:
             - '127.0.0.1:${FORWARD_EMBEDDINGS_PORT:-8081}:80'
+        restart: unless-stopped
         environment:
             MODEL_ID: intfloat/multilingual-e5-small
+            # TEI warms up with a full batch of MAX_BATCH_TOKENS (default 16384). Under amd64 emulation
+            # on Apple Silicon that warmup alone can exhaust the Docker VM memory and get the container
+            # OOM killed. Documents are chunked well below this, so a smaller batch costs nothing here.
+            MAX_BATCH_TOKENS: '${EMBEDDINGS_MAX_BATCH_TOKENS:-2048}'
         volumes:
             - 'embeddings_data:/data'
         networks:

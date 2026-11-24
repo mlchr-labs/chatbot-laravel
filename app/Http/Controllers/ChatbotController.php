@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateChatbotRequest;
 use App\Http\Resources\KnowledgeSourceResource;
 use App\Jobs\Knowledge\PurgeChatbotKnowledge;
 use App\Models\Chatbot;
+use App\Services\LLM\PlatformModels;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -28,7 +29,7 @@ class ChatbotController extends Controller
         return view('chatbots.index', ['chatbots' => $chatbots]);
     }
 
-    public function create(): View
+    public function create(PlatformModels $platformModels): View
     {
         $limit = Gate::inspect('create', Chatbot::class);
 
@@ -36,6 +37,7 @@ class ChatbotController extends Controller
             'limitMessage' => $limit->denied() ? $limit->message() : null,
             'chatbot' => new Chatbot(['provider' => LlmProvider::OpenAi, 'temperature' => 0.7, 'is_active' => true]),
             'providers' => LlmProvider::cases(),
+            'modelCatalog' => $platformModels->catalog(),
         ]);
     }
 
@@ -74,13 +76,14 @@ class ChatbotController extends Controller
         ]);
     }
 
-    public function edit(Chatbot $chatbot): View
+    public function edit(Chatbot $chatbot, PlatformModels $platformModels): View
     {
         Gate::authorize('update', $chatbot);
 
         return view('chatbots.edit', [
             'chatbot' => $chatbot,
             'providers' => LlmProvider::cases(),
+            'modelCatalog' => $platformModels->catalog(),
         ]);
     }
 

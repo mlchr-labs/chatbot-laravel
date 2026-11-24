@@ -26,4 +26,29 @@ class PlatformModels
     {
         return in_array($model, $this->allowed($provider), true);
     }
+
+    /** Default model of the provider (llm.providers.*.model), the one the form pre-selects. */
+    public function defaultFor(LlmProvider $provider): string
+    {
+        return (string) $this->config->get("llm.providers.{$provider->value}.model", '');
+    }
+
+    /**
+     * What the chatbot form needs to follow the chosen provider without extra requests.
+     *
+     * @return array<string, array{default: string, models: list<string>}>
+     */
+    public function catalog(): array
+    {
+        $catalog = [];
+
+        foreach (LlmProvider::cases() as $provider) {
+            $catalog[$provider->value] = [
+                'default' => $this->defaultFor($provider),
+                'models' => $this->allowed($provider),
+            ];
+        }
+
+        return $catalog;
+    }
 }

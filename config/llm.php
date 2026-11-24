@@ -9,6 +9,10 @@ return [
     'timeout' => (int) env('LLM_TIMEOUT', 60),
     'connect_timeout' => (int) env('LLM_CONNECT_TIMEOUT', 5),
 
+    // Model listing used by the chatbot form when the chatbot has a key of its own.
+    'models_cache_ttl' => (int) env('LLM_MODELS_CACHE_TTL', 300),
+    'models_per_minute_user' => (int) env('LLM_MODELS_PER_MINUTE_USER', 10),
+
     // Used when a chatbot does not set its own limit. Anthropic requires max_tokens on every request.
     'max_tokens' => (int) env('LLM_MAX_TOKENS', 1024),
 

@@ -29,6 +29,11 @@ class KnowledgeSourcePolicy
         return $this->owns($user, $source);
     }
 
+    public function retry(User $user, KnowledgeSource $source): Response
+    {
+        return $this->owns($user, $source);
+    }
+
     private function owns(User $user, KnowledgeSource $source): Response
     {
         return $source->user_id !== null && $source->user_id === $user->id

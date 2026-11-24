@@ -31,5 +31,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('chatbots/{chatbot}/sources', [KnowledgeSourceController::class, 'store'])
             ->middleware('throttle:knowledge-uploads')
             ->name('chatbots.sources.store');
+
+        Route::post('chatbots/{chatbot}/sources/{knowledgeSource}/retry', [KnowledgeSourceController::class, 'retry'])
+            ->middleware('throttle:knowledge-retries')
+            ->name('chatbots.sources.retry');
     });
 });

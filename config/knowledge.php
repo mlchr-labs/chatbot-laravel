@@ -18,6 +18,9 @@ return [
     // Upload requests per minute per user (store endpoint).
     'uploads_per_minute_user' => (int) env('KNOWLEDGE_UPLOADS_PER_MINUTE_USER', 30),
 
+    // Retry requests per minute per user (reprocess a failed source).
+    'retries_per_minute_user' => (int) env('KNOWLEDGE_RETRIES_PER_MINUTE_USER', 10),
+
     // A source whose extracted text is longer than this many characters fails (guards embedding cost).
     'max_extracted_chars' => (int) env('KNOWLEDGE_MAX_EXTRACTED_CHARS', 2_000_000),
 

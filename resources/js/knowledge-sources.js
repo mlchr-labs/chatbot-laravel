@@ -16,6 +16,7 @@ export default ({ sources, indexUrl, storeUrl, csrf }) => ({
     uploads: [],
     dragging: false,
     toDelete: null,
+    retryError: null,
     pollTimer: null,
     nextUploadId: 1,
 
@@ -138,6 +139,34 @@ export default ({ sources, indexUrl, storeUrl, csrf }) => ({
         if (!response.ok) {
             await this.refresh();
         }
+    },
+
+    async retry(source) {
+        this.retryError = null;
+
+        // Optimistic: the row goes back to the queue while the server clears the old index.
+        const previous = { ...source };
+        Object.assign(source, { status: 'pending', status_label: 'Na fila', processing: true, error: null, can_retry: false });
+        this.schedulePoll();
+
+        try {
+            const response = await fetch(`${storeUrl}/${source.ulid}/retry`, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (response.ok) return;
+
+            Object.assign(source, previous);
+            this.retryError = response.status === 429
+                ? 'Muitas tentativas seguidas. Aguarde um minuto e tente de novo.'
+                : ((await response.json().catch(() => null))?.message ?? 'Não foi possível reiniciar o processamento.');
+        } catch (e) {
+            Object.assign(source, previous);
+            this.retryError = 'Falha de rede. Tente novamente.';
+        }
+
+        await this.refresh();
     },
 
     hasProcessing() {

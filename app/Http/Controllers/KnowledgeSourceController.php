@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Knowledge\DispatchKnowledgeIngestion;
+use App\Actions\Knowledge\RetryKnowledgeIngestion;
 use App\Enums\KnowledgeSourceStatus;
+use App\Exceptions\KnowledgeRetryException;
 use App\Http\Requests\StoreKnowledgeSourceRequest;
 use App\Http\Resources\KnowledgeSourceResource;
 use App\Jobs\Knowledge\DeleteKnowledgeSource;
@@ -94,6 +96,30 @@ class KnowledgeSourceController extends Controller
 
         return redirect()->to(route('chatbots.show', $chatbot).'#knowledge')
             ->with('status', 'Documento removido.');
+    }
+
+    public function retry(Request $request, Chatbot $chatbot, KnowledgeSource $knowledgeSource, RetryKnowledgeIngestion $retry): JsonResponse|RedirectResponse
+    {
+        Gate::authorize('update', $chatbot);
+        Gate::authorize('retry', $knowledgeSource);
+
+        try {
+            $retry($knowledgeSource);
+        } catch (KnowledgeRetryException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return redirect()->to(route('chatbots.show', $chatbot).'#knowledge')
+                ->withErrors(['knowledge' => $e->getMessage()]);
+        }
+
+        if ($request->wantsJson()) {
+            return (new KnowledgeSourceResource($knowledgeSource->refresh()))->response()->setStatusCode(202);
+        }
+
+        return redirect()->to(route('chatbots.show', $chatbot).'#knowledge')
+            ->with('status', 'Processamento reiniciado.');
     }
 
     /** Display only: never used to build a path. */

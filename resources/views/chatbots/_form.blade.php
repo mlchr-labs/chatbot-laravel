@@ -64,7 +64,7 @@
                         </datalist>
                         <div class="mt-2 flex flex-wrap items-center gap-3">
                             <x-ui.button type="button" variant="secondary" class="px-3! py-1.5!" x-on:click="load()" x-bind:disabled="loading || !canLoad">
-                                <span x-text="loading ? 'Carregando...' : 'Carregar modelos'"></span>
+                                <span x-text="loading ? 'Carregando' : 'Carregar modelos'"></span>
                             </x-ui.button>
                             <span class="text-xs text-gray-500" x-show="loaded.length > 0" x-cloak x-text="loaded.length + ' modelos disponíveis'"></span>
                         </div>

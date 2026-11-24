@@ -11,14 +11,16 @@ use RuntimeException;
 
 class EmbedKnowledgeChunks extends KnowledgeSourceJob
 {
-    public int $tries = 3;
+    // Transient connection errors (embeddings or Qdrant restarting) are retried for a few minutes
+    // before the chain catch callback marks the source failed. Progress is kept via embedded_at.
+    public int $tries = 5;
 
     public int $timeout = 280;
 
     /** @return list<int> */
     public function backoff(): array
     {
-        return [10, 30, 60];
+        return [15, 45, 90, 180];
     }
 
     public function handle(EmbeddingClient $embeddings, VectorStore $store): void
@@ -69,6 +71,7 @@ class EmbedKnowledgeChunks extends KnowledgeSourceJob
 
         $this->source->update([
             'status' => KnowledgeSourceStatus::Indexed,
+            'failure_reason' => null,
             'error' => null,
             'chunks_count' => $this->source->chunks()->count(),
         ]);

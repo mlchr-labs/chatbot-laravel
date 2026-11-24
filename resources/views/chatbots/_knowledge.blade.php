@@ -62,6 +62,8 @@
         <x-ui.empty-state title="Nenhum documento ainda" description="Envie arquivos para o chatbot responder com base no conteúdo deles." />
     </div>
 
+    <p x-show="retryError" x-text="retryError" x-cloak class="text-sm text-red-600" role="alert"></p>
+
     <div x-show="sources.length > 0" x-cloak>
         <x-ui.table>
             <x-slot:head>
@@ -88,7 +90,13 @@
                     </td>
                     <td x-text="source.chunks_count"></td>
                     <td class="whitespace-nowrap" x-text="formatDate(source.created_at)"></td>
-                    <td class="text-end">
+                    <td class="space-x-3 text-end whitespace-nowrap">
+                        <button
+                            type="button"
+                            x-show="source.status === 'failed' && source.can_retry"
+                            class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                            @click="retry(source)"
+                        >Tentar novamente</button>
                         <button type="button" class="text-sm font-medium text-red-600 hover:text-red-700" @click="askDelete(source)">Excluir</button>
                     </td>
                 </tr>

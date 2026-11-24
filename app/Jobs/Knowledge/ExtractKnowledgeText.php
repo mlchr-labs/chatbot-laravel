@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Knowledge;
 
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeFileType;
 use App\Enums\KnowledgeSourceStatus;
 use App\Exceptions\KnowledgeProcessingException;
@@ -22,16 +23,16 @@ class ExtractKnowledgeText extends KnowledgeSourceJob
         $this->source->update(['status' => KnowledgeSourceStatus::Extracting, 'error' => null]);
 
         $type = KnowledgeFileType::fromPath($this->source->disk_path)
-            ?? throw new KnowledgeProcessingException('Tipo de arquivo não suportado.');
+            ?? throw new KnowledgeProcessingException('Unsupported file type.', KnowledgeFailureReason::UnsupportedFile);
 
         $text = $extractor->extract($this->disk()->path($this->source->disk_path), $type);
 
         if ($text === '') {
-            throw new KnowledgeProcessingException('Nenhum texto foi encontrado no documento. PDFs escaneados (imagens) não são suportados.');
+            throw new KnowledgeProcessingException('No text found in the document.', KnowledgeFailureReason::EmptyDocument);
         }
 
         if (mb_strlen($text) > (int) config('knowledge.max_extracted_chars')) {
-            throw new KnowledgeProcessingException('O documento tem texto demais para ser indexado. Divida em arquivos menores.');
+            throw new KnowledgeProcessingException('Extracted text is over the configured cap.', KnowledgeFailureReason::DocumentTooLarge);
         }
 
         // Hand-off to the next job goes through the private disk, not the queue payload.

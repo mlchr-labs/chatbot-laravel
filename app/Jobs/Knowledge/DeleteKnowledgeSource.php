@@ -2,7 +2,8 @@
 
 namespace App\Jobs\Knowledge;
 
-use App\Contracts\VectorStore;
+use App\Actions\Knowledge\PurgeKnowledgeIndex;
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeSourceStatus;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -17,14 +18,13 @@ class DeleteKnowledgeSource extends KnowledgeSourceJob
         return [10, 30, 60];
     }
 
-    public function handle(VectorStore $store): void
+    public function handle(PurgeKnowledgeIndex $purge): void
     {
-        $store->deleteBySource($this->source->chatbot->ulid, $this->source->ulid);
+        $purge($this->source);
 
         // Row goes last so a failed attempt can be retried with the source still known.
-        $this->disk()->delete([$this->source->disk_path, $this->source->extractedTextPath()]);
+        $this->disk()->delete($this->source->disk_path);
 
-        $this->source->chunks()->delete();
         $this->source->delete();
     }
 
@@ -38,7 +38,8 @@ class DeleteKnowledgeSource extends KnowledgeSourceJob
         // Bring it back to the panel so the owner can try again.
         $this->source->update([
             'status' => KnowledgeSourceStatus::Failed,
-            'error' => 'Não foi possível excluir o documento. Tente novamente.',
+            'failure_reason' => KnowledgeFailureReason::DeletionFailed,
+            'error' => null,
         ]);
     }
 }

@@ -3,7 +3,7 @@
 namespace Tests\Feature\Knowledge;
 
 use App\Actions\Knowledge\DispatchKnowledgeIngestion;
-use App\Actions\Knowledge\FailKnowledgeSource;
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeSourceStatus;
 use App\Jobs\Knowledge\DeleteKnowledgeSource;
 use App\Jobs\Knowledge\EmbedKnowledgeChunks;
@@ -173,8 +173,8 @@ class KnowledgePipelineTest extends TestCase
 
         $source->refresh();
         $this->assertSame(KnowledgeSourceStatus::Failed, $source->status);
-        $this->assertSame(FailKnowledgeSource::GENERIC_MESSAGE, $source->error);
-        $this->assertStringNotContainsString('tei.test', $source->error);
+        $this->assertSame(KnowledgeFailureReason::EmbeddingUnavailable, $source->failure_reason);
+        $this->assertNull($source->error);
     }
 
     public function test_document_without_text_fails_with_an_actionable_message(): void
@@ -189,7 +189,7 @@ class KnowledgePipelineTest extends TestCase
 
         $source->refresh();
         $this->assertSame(KnowledgeSourceStatus::Failed, $source->status);
-        $this->assertStringContainsString('Nenhum texto', $source->error);
+        $this->assertSame(KnowledgeFailureReason::EmptyDocument, $source->failure_reason);
         $this->assertSame(0, KnowledgeChunk::query()->count());
         Http::assertNothingSent();
     }

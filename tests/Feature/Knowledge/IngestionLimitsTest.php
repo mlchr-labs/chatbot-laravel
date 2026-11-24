@@ -3,6 +3,7 @@
 namespace Tests\Feature\Knowledge;
 
 use App\Actions\Knowledge\DispatchKnowledgeIngestion;
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeSourceStatus;
 use App\Models\Chatbot;
 use App\Models\KnowledgeChunk;
@@ -116,7 +117,7 @@ class IngestionLimitsTest extends TestCase
         $source = $this->runChain(str_repeat('palavra ', 30));
 
         $this->assertSame(KnowledgeSourceStatus::Failed, $source->status);
-        $this->assertSame('O documento tem texto demais para ser indexado. Divida em arquivos menores.', $source->error);
+        $this->assertSame(KnowledgeFailureReason::DocumentTooLarge, $source->failure_reason);
         $this->assertSame(0, KnowledgeChunk::count());
         Http::assertNothingSent();
     }
@@ -127,7 +128,7 @@ class IngestionLimitsTest extends TestCase
 
         $source = $this->runChain('12345678');
 
-        $this->assertNotSame('O documento tem texto demais para ser indexado. Divida em arquivos menores.', $source->error);
+        $this->assertNotSame(KnowledgeFailureReason::DocumentTooLarge, $source->failure_reason);
     }
 
     public function test_too_many_chunks_fails_the_source_safely(): void
@@ -138,7 +139,7 @@ class IngestionLimitsTest extends TestCase
         $source = $this->runChain($paragraphs);
 
         $this->assertSame(KnowledgeSourceStatus::Failed, $source->status);
-        $this->assertSame('O documento gera trechos demais para ser indexado. Divida em arquivos menores.', $source->error);
+        $this->assertSame(KnowledgeFailureReason::DocumentTooLarge, $source->failure_reason);
         $this->assertSame(0, KnowledgeChunk::count());
         Http::assertNothingSent();
     }

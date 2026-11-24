@@ -49,6 +49,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('provider-models', fn (Request $request) => Limit::perMinute((int) config('llm.models_per_minute_user'))
             ->by('user:'.($request->user()?->getAuthIdentifier() ?? IpHasher::hash($request->ip())))
             ->response(fn (Request $request, array $headers) => response()->json(['message' => 'Muitas consultas de modelos. Aguarde um instante e tente de novo.'], 429, $headers)));
+
+        RateLimiter::for('knowledge-retries', fn (Request $request) => Limit::perMinute((int) config('knowledge.retries_per_minute_user'))
+            ->by('user:'.($request->user()?->getAuthIdentifier() ?? IpHasher::hash($request->ip()))));
     }
 
     private function configureSandboxRateLimiting(): void

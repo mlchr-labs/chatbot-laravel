@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeSourceStatus;
 use App\Models\Concerns\BelongsToUser;
 use App\Models\Concerns\HasPublicUlid;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // chatbot_id and user_id are set through relations, never from request input.
-#[Fillable(['original_name', 'disk_path', 'mime', 'size', 'status', 'error', 'chunks_count'])]
+#[Fillable(['original_name', 'disk_path', 'mime', 'size', 'status', 'failure_reason', 'error', 'chunks_count'])]
 class KnowledgeSource extends Model
 {
     /** @use HasFactory<KnowledgeSourceFactory> */
@@ -39,6 +40,7 @@ class KnowledgeSource extends Model
     {
         return [
             'status' => KnowledgeSourceStatus::class,
+            'failure_reason' => KnowledgeFailureReason::class,
             'size' => 'integer',
             'chunks_count' => 'integer',
         ];

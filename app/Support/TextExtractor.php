@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeFileType;
 use App\Exceptions\KnowledgeProcessingException;
 use Spatie\PdfToText\Pdf;
@@ -32,7 +33,7 @@ class TextExtractor
         } catch (Throwable $e) {
             report($e);
 
-            throw new KnowledgeProcessingException('Não foi possível ler o PDF.', previous: $e);
+            throw new KnowledgeProcessingException('Could not read the PDF.', KnowledgeFailureReason::ExtractionFailed, $e);
         }
     }
 
@@ -73,7 +74,7 @@ class TextExtractor
         $raw = @file_get_contents($path);
 
         if ($raw === false) {
-            throw new KnowledgeProcessingException('Não foi possível ler o arquivo enviado.');
+            throw new KnowledgeProcessingException('Could not read the uploaded file.', KnowledgeFailureReason::ExtractionFailed);
         }
 
         return $this->toUtf8($raw);

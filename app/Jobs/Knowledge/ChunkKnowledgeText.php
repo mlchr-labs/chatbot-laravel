@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Knowledge;
 
+use App\Enums\KnowledgeFailureReason;
 use App\Enums\KnowledgeSourceStatus;
 use App\Exceptions\KnowledgeProcessingException;
 use App\Models\KnowledgeChunk;
@@ -24,17 +25,17 @@ class ChunkKnowledgeText extends KnowledgeSourceJob
         $text = $this->disk()->get($path);
 
         if ($text === null) {
-            throw new KnowledgeProcessingException('O texto extraído não foi encontrado.');
+            throw new KnowledgeProcessingException('Extracted text file not found.', KnowledgeFailureReason::ExtractionFailed);
         }
 
         $pieces = $chunker->chunk($text);
 
         if ($pieces === []) {
-            throw new KnowledgeProcessingException('Nenhum conteúdo utilizável foi encontrado no documento.');
+            throw new KnowledgeProcessingException('No usable content after chunking.', KnowledgeFailureReason::EmptyDocument);
         }
 
         if (count($pieces) > (int) config('knowledge.max_chunks_per_source')) {
-            throw new KnowledgeProcessingException('O documento gera trechos demais para ser indexado. Divida em arquivos menores.');
+            throw new KnowledgeProcessingException('Too many chunks for one source.', KnowledgeFailureReason::DocumentTooLarge);
         }
 
         $template = new KnowledgeChunk;

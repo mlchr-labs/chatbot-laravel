@@ -2,9 +2,21 @@
 
 namespace App\Exceptions;
 
+use App\Enums\KnowledgeFailureReason;
 use RuntimeException;
+use Throwable;
 
 /**
- * A processing failure whose message is safe to show to the document owner.
+ * A processing failure the pipeline understands. The message is for logs; the panel only
+ * ever shows the text of the reason.
  */
-class KnowledgeProcessingException extends RuntimeException {}
+class KnowledgeProcessingException extends RuntimeException
+{
+    public function __construct(
+        string $message = '',
+        public readonly ?KnowledgeFailureReason $reason = null,
+        ?Throwable $previous = null,
+    ) {
+        parent::__construct($message, 0, $previous);
+    }
+}

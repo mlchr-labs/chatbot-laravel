@@ -26,7 +26,7 @@ return [
         'groq' => [
             'api_key' => env('GROQ_API_KEY'),
             'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
-            'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+            'model' => env('GROQ_MODEL', 'openai/gpt-oss-20b'),
             'max_tokens_param' => 'max_tokens',
             'send_temperature' => true,
             // Usage arrives in x_groq.usage of the last chunk, parsed by the client.
@@ -60,7 +60,7 @@ return [
     // Override with a comma separated list, e.g. OPENAI_PLATFORM_MODELS=gpt-6-luna,gpt-6-mini.
     'platform_models' => [
         'openai' => $csv((string) env('OPENAI_PLATFORM_MODELS', '')) ?: [env('OPENAI_MODEL', 'gpt-6-luna')],
-        'groq' => $csv((string) env('GROQ_PLATFORM_MODELS', '')) ?: [env('GROQ_MODEL', 'llama-3.3-70b-versatile')],
+        'groq' => $csv((string) env('GROQ_PLATFORM_MODELS', '')) ?: [env('GROQ_MODEL', 'openai/gpt-oss-20b')],
         'deepseek' => $csv((string) env('DEEPSEEK_PLATFORM_MODELS', '')) ?: [env('DEEPSEEK_MODEL', 'deepseek-v4-flash')],
         'anthropic' => $csv((string) env('ANTHROPIC_PLATFORM_MODELS', '')) ?: [env('ANTHROPIC_MODEL', 'claude-haiku-5-5')],
         'gemini' => $csv((string) env('GEMINI_PLATFORM_MODELS', '')) ?: [env('GEMINI_MODEL', 'gemini-3.5-flash-lite')],

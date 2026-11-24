@@ -26,6 +26,7 @@
 
     <div class="space-y-6" x-data="modelPicker({
         catalog: @js($modelCatalog),
+        labels: @js($providerOptions),
         provider: @js(old('provider', $currentProvider)),
         model: @js((string) old('model', $chatbot->model)),
         savedProvider: @js($currentProvider),
@@ -41,52 +42,9 @@
                 <x-ui.select name="provider" :options="$providerOptions" :selected="$currentProvider" required x-model="provider" />
             </div>
             <div>
-                <x-ui.label for="model">Modelo</x-ui.label>
-
-                {{-- Platform key: only the models the platform allows for the provider. --}}
-                <template x-if="!ownKey">
-                    <select name="model" id="model" required x-model="model" class="{{ $fieldClasses }}">
-                        <template x-for="option in platformModels" :key="option">
-                            <option :value="option" x-text="option" :selected="option === model"></option>
-                        </template>
-                    </select>
-                </template>
-
-                {{-- Own key: free text, with the provider list as suggestions once loaded. --}}
-                <template x-if="ownKey">
-                    <div>
-                        <input type="text" name="model" id="model" required maxlength="100" autocomplete="off"
-                            list="model-options" x-model="model" :placeholder="defaultModel" class="{{ $fieldClasses }}">
-                        <datalist id="model-options">
-                            <template x-for="option in loaded" :key="option">
-                                <option :value="option"></option>
-                            </template>
-                        </datalist>
-                        <div class="mt-2 flex flex-wrap items-center gap-3">
-                            <x-ui.button type="button" variant="secondary" class="px-3! py-1.5!" x-on:click="load()" x-bind:disabled="loading || !canLoad">
-                                <span x-text="loading ? 'Carregando' : 'Carregar modelos'"></span>
-                            </x-ui.button>
-                            <span class="text-xs text-gray-500" x-show="loaded.length > 0" x-cloak x-text="loaded.length + ' modelos disponíveis'"></span>
-                        </div>
-                        <p class="mt-1 text-sm text-red-600" x-show="error" x-cloak x-text="error" role="alert"></p>
-                        <p class="mt-1 text-xs text-gray-500" x-show="!canLoad" x-cloak>Digite a chave de API do provedor para listar os modelos, ou escreva o nome do modelo.</p>
-                    </div>
-                </template>
-
-                @error('model')
-                    <p id="model-error" class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-        </div>
-
-        <div class="grid gap-6 sm:grid-cols-2">
-            <div>
-                <x-ui.label for="temperature">Temperatura (0 a 2)</x-ui.label>
-                <x-ui.input name="temperature" type="number" step="0.01" min="0" max="2" :value="$chatbot->temperature" required />
-            </div>
-            <div>
                 <x-ui.label for="api_key">Chave de API do provedor (opcional)</x-ui.label>
                 <x-ui.input name="api_key" type="password" autocomplete="off" maxlength="500" x-model="apiKey"
+                    x-on:paste="schedule()" x-on:blur="schedule()"
                     :placeholder="$chatbot->hasApiKey() ? 'Chave configurada' : 'Usa a chave da plataforma se vazio'" />
                 @if ($chatbot->hasApiKey())
                     <p class="mt-1 text-xs text-gray-500">Deixe em branco para manter a chave atual.</p>
@@ -95,6 +53,47 @@
                         Remover a chave atual
                     </label>
                 @endif
+            </div>
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+            <div>
+                <x-ui.label for="model">Modelo</x-ui.label>
+
+                {{-- The list is the platform one, or the one the provider returned for the key. --}}
+                <select name="model" id="model" required x-model="selected" x-show="!custom" x-bind:disabled="custom"
+                    x-bind:aria-busy="loading" class="{{ $fieldClasses }}">
+                    <option value="" disabled x-bind:selected="selected === ''">Selecione um modelo</option>
+                    <template x-for="option in options" :key="option.value">
+                        <option :value="option.value" x-text="option.label" :selected="option.value === selected"></option>
+                    </template>
+                    <option value="__custom__">Outro modelo…</option>
+                </select>
+
+                {{-- Fallback: free id, submitted in the same field. --}}
+                <div x-show="custom" x-cloak>
+                    <input type="text" name="model" id="model-custom" required maxlength="100" autocomplete="off" disabled
+                        x-ref="customModel" x-model="customModel" x-bind:disabled="!custom" :placeholder="defaultModel"
+                        class="{{ $fieldClasses }}">
+                    <button type="button" class="mt-1 text-xs text-indigo-600 underline hover:text-indigo-800" x-on:click="useList()">Escolher da lista</button>
+                </div>
+
+                <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500" x-show="status || error" x-cloak aria-live="polite">
+                    <span x-show="status" x-text="status"></span>
+                    <span class="text-sm text-red-600" x-show="error" x-text="error" role="alert"></span>
+                    <button type="button" class="text-indigo-600 underline hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+                        x-show="!loading && ownKey && canLoad" x-on:click="reload()" x-bind:disabled="blocked">recarregar</button>
+                </div>
+                <p class="mt-1 text-xs text-gray-500" x-show="hint" x-cloak x-text="hint"></p>
+                <p class="mt-1 text-sm text-amber-700" x-show="unavailable" x-cloak x-text="unavailableMessage" role="status"></p>
+
+                @error('model')
+                    <p id="model-error" class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+            <div>
+                <x-ui.label for="temperature">Temperatura (0 a 2)</x-ui.label>
+                <x-ui.input name="temperature" type="number" step="0.01" min="0" max="2" :value="$chatbot->temperature" required />
             </div>
         </div>
     </div>

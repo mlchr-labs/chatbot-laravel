@@ -32,7 +32,7 @@ services:
         image: '${EMBEDDINGS_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.7}'
         platform: '${CONTAINER_PLATFORM:-linux/amd64}'
         ports:
-            - '127.0.0.1:8081:80'
+            - '127.0.0.1:${FORWARD_EMBEDDINGS_PORT:-8081}:80'
         environment:
             MODEL_ID: intfloat/multilingual-e5-small
         volumes:
@@ -78,8 +78,8 @@ services:
     webapp_mailpit:
         image: 'axllent/mailpit:latest'
         ports:
-            - '127.0.0.1:1025:1025'
-            - '127.0.0.1:8025:8025'
+            - '127.0.0.1:${FORWARD_MAILPIT_PORT:-1025}:1025'
+            - '127.0.0.1:${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
         networks:
             - sail
     webapp_qdrant:
@@ -89,7 +89,7 @@ services:
         networks:
             - sail
         ports:
-         - '127.0.0.1:6333:6333'
+         - '127.0.0.1:${FORWARD_QDRANT_PORT:-6333}:6333'
         volumes:
          - 'qdrant_data:/qdrant/storage'
 networks:

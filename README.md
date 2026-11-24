@@ -97,10 +97,16 @@ Host ports, all optional and commented out in `.env.example`:
 | `REVERB_EXPOSED_PORT` | `8090` | Reverb WebSocket |
 | `FORWARD_DB_PORT` | `3306` | MariaDB (127.0.0.1 only) |
 | `FORWARD_REDIS_PORT` | `6379` | Redis (127.0.0.1 only) |
+| `FORWARD_QDRANT_PORT` | `6333` | Qdrant (127.0.0.1 only) |
+| `FORWARD_EMBEDDINGS_PORT` | `8081` | Embeddings server (127.0.0.1 only) |
+| `FORWARD_MAILPIT_PORT` | `1025` | Mailpit SMTP (127.0.0.1 only) |
+| `FORWARD_MAILPIT_DASHBOARD_PORT` | `8025` | Mailpit web UI (127.0.0.1 only) |
 
-If you change the Reverb port in development, keep `REVERB_PORT`, `REVERB_SERVER_PORT` and `REVERB_EXPOSED_PORT` equal, as `.env.example` warns. If you change `APP_PORT`, update `APP_URL` too.
+These only change the host side. Inside the Docker network the app keeps talking to the default ports, so `DB_PORT` and `REDIS_PORT` stay as they are.
 
-Qdrant (`6333`), embeddings (`8081`) and Mailpit (`1025` and `8025`) are published on 127.0.0.1 only, with fixed ports in the compose file.
+`make setup` asks for `APP_PORT`, the database, Redis and Reverb ports. When a port is already taken on your machine, it warns and suggests the next free one, and it asks for the other ports only in that case. Before starting the containers, `make setup` and `make up` stop with the name of the variable to change if a port is in use by another process.
+
+If you change the Reverb port in development, keep `REVERB_PORT`, `REVERB_SERVER_PORT` and `REVERB_EXPOSED_PORT` equal, as `.env.example` warns. If you change `APP_PORT`, update `APP_URL` too. The wizard does both for you.
 
 The embeddings service reads `CONTAINER_PLATFORM` (default `linux/amd64`) and `EMBEDDINGS_IMAGE` (default `ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`). Set them in `.env` if you need a different platform or image.
 
@@ -138,7 +144,7 @@ Scripts in `package.json`:
 | What | Address |
 | --- | --- |
 | App and panel | http://localhost:8080 (`APP_PORT`) |
-| Mailpit (verification and password reset emails) | http://localhost:8025 |
+| Mailpit (verification and password reset emails) | http://localhost:8025 (`FORWARD_MAILPIT_DASHBOARD_PORT`) |
 | Horizon | http://localhost:8080/horizon |
 
 `/` redirects to the login page, or to the dashboard if you are signed in. Create your account at `/register`. Email verification is enabled, so open Mailpit to get the confirmation link.

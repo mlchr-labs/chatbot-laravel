@@ -329,27 +329,130 @@ app_url_with_port() {
     fi
 }
 
-ask_ports() {
-    local current port url reverb
-    step "Host ports (Enter keeps the current value)"
+# True when something is listening on the host port (bash /dev/tcp, no extra tools).
+port_busy() {
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
 
-    current="$(env_get APP_PORT)"
-    [ -n "$current" ] || current="8080"
-    port="$(ask_port "APP_PORT" "$current")"
-    url="$(env_get APP_URL)"
-    if [ "$port" != "$current" ] || ! env_has APP_PORT; then
-        env_set APP_PORT "$port"
-    fi
-    if [ "$(app_url_with_port "$url" "$port")" != "$url" ]; then
-        env_set APP_URL "$(app_url_with_port "$url" "$port")"
-        ok "APP_URL set to $(env_get APP_URL)"
-    fi
+# True when the port is published by this project's own container (re-running setup on a live stack).
+port_owned_by_stack() {
+    local service="$1" container_port="$2" port="$3" published
+    published="$(compose port "$service" "$container_port" 2>/dev/null || true)"
+    [ -n "$published" ] && [ "${published##*:}" = "$port" ]
+}
 
-    # Local dev needs REVERB_PORT = REVERB_SERVER_PORT = REVERB_EXPOSED_PORT (see .env.example).
+port_conflict() {
+    port_busy "$3" && ! port_owned_by_stack "$1" "$2" "$3"
+}
+
+# Host ports the .env assigns to every published port except the one named.
+configured_ports_except() {
+    local except="$1" line var default service container_port always value
+    for line in $HOST_PORTS; do
+        IFS='|' read -r var default service container_port always <<<"$line"
+        [ "$var" != "$except" ] || continue
+        value="$(env_get "$var")"
+        printf '%s\n' "${value:-$default}"
+    done
+    [ "$except" = "REVERB" ] || printf '%s\n' "$(reverb_port_current)"
+}
+
+# True when another published port in .env already uses this number.
+port_reserved() {
+    local list nl=$'\n'
+    list="$(configured_ports_except "$1")"
+    case "${nl}${list}${nl}" in
+        *"${nl}$2${nl}"*) return 0 ;;
+    esac
+    return 1
+}
+
+next_free_port() {
+    local port=$(( $1 + 1 )) except="$2"
+    while [ "$port" -le 65535 ] && { port_busy "$port" || port_reserved "$except" "$port"; }; do
+        port=$((port + 1))
+    done
+    printf '%s' "$port"
+}
+
+reverb_port_current() {
+    local current
     current="$(env_get REVERB_EXPOSED_PORT)"
     [ -n "$current" ] || current="$(env_get REVERB_PORT)"
     [ -n "$current" ] || current="8090"
-    reverb="$(ask_port "Reverb port (REVERB_PORT, REVERB_SERVER_PORT, REVERB_EXPOSED_PORT)" "$current")"
+    printf '%s' "$current"
+}
+
+# Host ports published by docker-compose.yml: VAR|default|service|container port|always ask.
+# Reverb is handled apart because three variables must stay equal.
+HOST_PORTS="APP_PORT|8080|webapp|80|1
+FORWARD_DB_PORT|3306|webapp_mariadb|3306|1
+FORWARD_REDIS_PORT|6379|webapp_redis|6379|1
+FORWARD_QDRANT_PORT|6333|webapp_qdrant|6333|0
+FORWARD_EMBEDDINGS_PORT|8081|webapp_embeddings|80|0
+FORWARD_MAILPIT_PORT|1025|webapp_mailpit|1025|0
+FORWARD_MAILPIT_DASHBOARD_PORT|8025|webapp_mailpit|8025|0"
+
+# Asks for one host port. Busy ports get a free one as the suggested default.
+# Ports that are free and not "always ask" are kept without a question.
+choose_host_port() {
+    local var="$1" default="$2" service="$3" container_port="$4" always="$5" current suggested port
+    current="$(env_get "$var")"
+    [ -n "$current" ] || current="$default"
+    suggested="$current"
+    if port_conflict "$service" "$container_port" "$current"; then
+        suggested="$(next_free_port "$current" "$var")"
+        warn "port $current ($var) is already in use on this machine. Suggesting $suggested."
+    elif port_reserved "$var" "$current"; then
+        suggested="$(next_free_port "$current" "$var")"
+        warn "port $current ($var) is already assigned to another service in .env. Suggesting $suggested."
+    elif [ "$always" != "1" ]; then
+        printf '%s' "$current"
+        return 0
+    fi
+    while true; do
+        port="$(ask_port "$var" "$suggested")"
+        port_reserved "$var" "$port" || break
+        printf '    Port %s is already assigned to another service in .env.\n' "$port" >&2
+    done
+    if [ "$port" != "$(env_get "$var")" ]; then
+        env_set "$var" "$port"
+    fi
+    printf '%s' "$port"
+}
+
+ask_ports() {
+    local line var default service container_port always port url reverb current suggested
+    step "Host ports (Enter keeps the current value)"
+
+    # A for loop (not "while read <<EOF") so the prompts can still read from the terminal.
+    for line in $HOST_PORTS; do
+        IFS='|' read -r var default service container_port always <<<"$line"
+        port="$(choose_host_port "$var" "$default" "$service" "$container_port" "$always")"
+        if [ "$var" = "APP_PORT" ]; then
+            url="$(env_get APP_URL)"
+            if [ "$(app_url_with_port "$url" "$port")" != "$url" ]; then
+                env_set APP_URL "$(app_url_with_port "$url" "$port")"
+                ok "APP_URL set to $(env_get APP_URL)"
+            fi
+        fi
+    done
+
+    # Local dev needs REVERB_PORT = REVERB_SERVER_PORT = REVERB_EXPOSED_PORT (see .env.example).
+    current="$(reverb_port_current)"
+    suggested="$current"
+    if port_conflict "$APP_SERVICE" "$(env_get REVERB_SERVER_PORT)" "$current"; then
+        suggested="$(next_free_port "$current" REVERB)"
+        warn "port $current (Reverb) is already in use on this machine. Suggesting $suggested."
+    elif port_reserved REVERB "$current"; then
+        suggested="$(next_free_port "$current" REVERB)"
+        warn "port $current (Reverb) is already assigned to another service in .env. Suggesting $suggested."
+    fi
+    while true; do
+        reverb="$(ask_port "Reverb port (REVERB_PORT, REVERB_SERVER_PORT, REVERB_EXPOSED_PORT)" "$suggested")"
+        port_reserved REVERB "$reverb" || break
+        printf '    Port %s is already assigned to another service in .env.\n' "$reverb" >&2
+    done
     if [ "$reverb" != "$(env_get REVERB_PORT)" ] \
         || [ "$reverb" != "$(env_get REVERB_SERVER_PORT)" ] \
         || [ "$reverb" != "$(env_get REVERB_EXPOSED_PORT)" ]; then
@@ -357,6 +460,33 @@ ask_ports() {
         env_set REVERB_SERVER_PORT "$reverb"
         env_set REVERB_EXPOSED_PORT "$reverb"
         ok "Reverb port set to $reverb"
+    fi
+}
+
+# Fails before "docker compose up" when a host port is taken by something else,
+# naming the variable to change. Covers non-interactive runs and "make up".
+check_host_ports() {
+    local line var default service container_port always port conflicts=""
+    for line in $HOST_PORTS; do
+        IFS='|' read -r var default service container_port always <<<"$line"
+        port="$(env_get "$var")"
+        [ -n "$port" ] || port="$default"
+        if port_conflict "$service" "$container_port" "$port"; then
+            conflicts="${conflicts}       ${var}=${port}
+"
+        elif port_reserved "$var" "$port"; then
+            conflicts="${conflicts}       ${var}=${port} (same port as another service in .env)
+"
+        fi
+    done
+    port="$(reverb_port_current)"
+    if port_conflict "$APP_SERVICE" "$(env_get REVERB_SERVER_PORT)" "$port"; then
+        conflicts="${conflicts}       REVERB_EXPOSED_PORT=${port}
+"
+    fi
+    if [ -n "$conflicts" ]; then
+        die "these host ports are already in use by another process:
+${conflicts}       Run 'make setup' to pick other ports, or set them in .env."
     fi
 }
 
@@ -374,6 +504,9 @@ compose() {
 }
 
 start_stack() {
+    step "Checking host ports"
+    check_host_ports
+    ok "OK"
     step "Starting containers"
     compose up -d --build
 }
@@ -410,6 +543,12 @@ prepare_app() {
     fi
 }
 
+mailpit_url() {
+    local port
+    port="$(env_get FORWARD_MAILPIT_DASHBOARD_PORT)"
+    printf 'http://localhost:%s' "${port:-8025}"
+}
+
 print_urls() {
     local url
     url="$(env_get APP_URL)"
@@ -418,7 +557,7 @@ print_urls() {
     step "Ready"
     info "App:      $url"
     info "Horizon:  $url/horizon"
-    info "Mailpit:  http://localhost:8025"
+    info "Mailpit:  $(mailpit_url)"
 }
 
 print_next_steps() {
@@ -429,7 +568,7 @@ print_next_steps() {
 
 Next steps:
   1. Create your account at ${url:-http://localhost:8080}/register
-  2. Confirm the email in Mailpit (http://localhost:8025)
+  2. Confirm the email in Mailpit ($(mailpit_url))
   3. Create a chatbot, upload documents and copy the widget snippet
 
   make up / make down     start or stop the stack

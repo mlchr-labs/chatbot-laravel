@@ -38,6 +38,55 @@ class ChatbotModelPickerTest extends TestCase
         $this->assertStringNotContainsString('placeholder="gpt-4o-mini"', $html);
     }
 
+    public function test_form_orders_provider_key_then_model_and_temperature(): void
+    {
+        $html = $this->actingAs($this->user)->get(route('chatbots.create'))->assertOk()->getContent();
+
+        $positions = array_map(fn (string $needle) => strpos($html, $needle), [
+            'for="provider"', 'for="api_key"', 'for="model"', 'for="temperature"',
+        ]);
+
+        $this->assertNotContains(false, $positions);
+        $sorted = $positions;
+        sort($sorted);
+        $this->assertSame($sorted, $positions);
+
+        // Provider and key share the first row, model and temperature the second.
+        $this->assertSame(2, substr_count($html, 'grid gap-6 sm:grid-cols-2'));
+    }
+
+    public function test_model_is_always_a_select_with_a_custom_option_and_no_load_button(): void
+    {
+        $html = $this->actingAs($this->user)->get(route('chatbots.create'))->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/<select\s+name="model"\s+id="model"/', $html);
+        $this->assertStringContainsString('<option value="__custom__">Outro modelo…</option>', $html);
+        // The free text fallback is submitted in the same field, and starts disabled.
+        $this->assertMatchesRegularExpression('/<input type="text" name="model" id="model-custom"[^>]* disabled/', $html);
+        $this->assertStringNotContainsString('<datalist', $html);
+        $this->assertStringNotContainsString('Carregar modelos', $html);
+        // Auto load on paste and blur of the key field.
+        $this->assertMatchesRegularExpression('/name="api_key"[^>]*x-on:paste="schedule\(\)"[^>]*x-on:blur="schedule\(\)"/', $html);
+    }
+
+    public function test_page_embeds_the_provider_labels_for_the_unavailable_model_warning(): void
+    {
+        $this->actingAs($this->user)->get(route('chatbots.create'))
+            ->assertOk()
+            ->assertSee('\u0022groq\u0022:\u0022Groq\u0022', false);
+    }
+
+    public function test_edit_page_hands_the_saved_model_to_the_picker_even_when_the_platform_dropped_it(): void
+    {
+        $chatbot = Chatbot::factory()->for($this->user)->withApiKey('sk-very-secret')->create(['provider' => 'groq', 'model' => 'llama-3.3-70b-versatile']);
+
+        $this->actingAs($this->user)->get(route('chatbots.edit', $chatbot))
+            ->assertOk()
+            ->assertSee("model: 'llama-3.3-70b-versatile'", false)
+            ->assertSee('hasSavedKey: true', false)
+            ->assertDontSee('sk-very-secret');
+    }
+
     public function test_edit_page_embeds_the_catalog_without_leaking_the_saved_key(): void
     {
         $chatbot = Chatbot::factory()->for($this->user)->withApiKey('sk-very-secret')->create();

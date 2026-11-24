@@ -38,24 +38,53 @@ For the Docker path you only need Docker with Compose. PHP, Node and `pdftotext`
 
 `docker-compose.yml` starts these services: `webapp` (nginx, php-fpm 8.4, Horizon, Reverb and the scheduler, all under supervisor), `webapp_mariadb`, `webapp_redis`, `webapp_qdrant`, `webapp_embeddings` and `webapp_mailpit`.
 
-The project folder is mounted at `/var/www/html` inside the container, so `vendor` and `node_modules` end up in your local folder, created by the commands below.
+The project folder is mounted at `/var/www/html` inside the container, so `vendor` and `node_modules` end up in your local folder.
 
-### 1. Create the `.env`
+You need Docker with Compose, `make` and `openssl` on the host.
+
+### Quick start
 
 ```sh
-cp .env.example .env
+make setup
 ```
 
-### 2. Set the variables
+`make setup` runs `bin/setup`, a wizard that:
 
-Edit `.env`. The `change-me` placeholders must be replaced.
+1. Checks that Docker, Docker Compose and `openssl` are available and that the Docker daemon responds.
+2. Creates `.env` from `.env.example` if it does not exist yet.
+3. Replaces every `change-me` placeholder with a random value and fills `REVERB_APP_ID`, `REVERB_APP_KEY` and `REVERB_APP_SECRET` when they are empty. Values already filled are never overwritten, so running it again is safe.
+4. When run in a terminal, asks for the LLM provider keys, `APP_PORT` (updating `APP_URL`) and the Reverb port (keeping `REVERB_PORT`, `REVERB_SERVER_PORT` and `REVERB_EXPOSED_PORT` equal). Enter keeps the current value.
+5. Runs `docker compose up -d --build`, waits for MariaDB to be healthy, then runs `composer setup` (dependencies, app key, migrations, front end build) and `php artisan knowledge:setup` inside the `webapp` container.
+6. Prints the URLs and the next steps.
+
+`bin/setup --env-only` does only steps 1 to 4 (without the Docker checks) and does not start anything.
+
+### Make targets
+
+| Command | What it does |
+| --- | --- |
+| `make` or `make help` | Lists the targets |
+| `make setup` | Runs the setup wizard described above |
+| `make setup FORCE=1` | Asks for confirmation, saves the current `.env` to `.env.backup` and recreates it from `.env.example` |
+| `make up` | Starts the stack, waits for MariaDB and prints the URLs. Fails if `.env` does not exist |
+| `make down` | Stops the stack. Volumes are kept |
+| `make logs` | Follows the logs of all services. `make logs s=webapp` follows one service |
+| `make shell` | Opens bash in the `webapp` container |
+| `make test` | Runs `composer test` in the `webapp` container |
+| `make destroy` | Asks for confirmation and runs `docker compose down -v`, deleting the volumes (MariaDB data, Qdrant vectors, embeddings cache) |
+
+MariaDB only reads `DB_PASSWORD` and `DB_ROOT_PASSWORD` when its volume is created. If you recreate `.env` with `make setup FORCE=1` while the old volume exists, the database keeps the old passwords and the app cannot connect. In that case run `make destroy` and then `make setup`. The setup script warns about this but never deletes anything on its own.
+
+### Variables
+
+The wizard fills the secrets for you. The table below is a reference for editing `.env` by hand.
 
 | Variable | Purpose |
 | --- | --- |
 | `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_ROOT_PASSWORD` | Used by the MariaDB container to create the database and by the app to connect |
 | `REDIS_PASSWORD` | Redis password (queue, cache) |
 | `QDRANT_API_KEY` | Qdrant API key. The app and the container read the same variable |
-| `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET` | Empty in `.env.example`. Fill them with your own values, otherwise the widget WebSocket will not work |
+| `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET` | Empty in `.env.example`. Without values the widget WebSocket will not work |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY` | Platform keys. Fill in the providers you want to offer. Chatbots with their own key do not depend on them |
 | `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `GROQ_MODEL`, `DEEPSEEK_MODEL` | Default model per provider |
 | `*_PLATFORM_MODELS` | Comma separated models allowed while a chatbot uses the platform key. Empty means only the default model |
@@ -73,33 +102,24 @@ If you change the Reverb port in development, keep `REVERB_PORT`, `REVERB_SERVER
 
 Qdrant (`6333`), embeddings (`8081`) and Mailpit (`1025` and `8025`) are published on 127.0.0.1 only, with fixed ports in the compose file.
 
-### 3. Start the containers
-
-```sh
-docker compose up -d --build
-```
-
 The embeddings service reads `CONTAINER_PLATFORM` (default `linux/amd64`) and `EMBEDDINGS_IMAGE` (default `ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`). Set them in `.env` if you need a different platform or image.
 
-### 4. Install dependencies and prepare the app
+### Manual setup
 
-Run these inside the `webapp` container:
+If you prefer not to use `make`:
 
-```sh
-docker compose exec webapp composer install
-docker compose exec webapp php artisan key:generate
-docker compose exec webapp php artisan migrate
-docker compose exec webapp php artisan knowledge:setup
-```
+1. `cp .env.example .env` and replace the `change-me` placeholders and the empty `REVERB_APP_*` values.
+2. `docker compose up -d --build` and wait until `webapp_mariadb` is healthy (`docker compose ps`).
+3. `docker compose exec webapp composer setup`, which installs dependencies, generates the key, runs migrations and builds the front end with pnpm.
+4. `docker compose exec webapp php artisan knowledge:setup`, which creates the vector collection in Qdrant if it does not exist yet. The embedding job also ensures the collection, so the command just gets it ready before the first upload.
 
-`knowledge:setup` creates the vector collection in Qdrant if it does not exist yet. The embedding job also ensures the collection, so the command just gets it ready before the first upload.
+Run `composer setup` inside the container, not on the host: `DB_HOST=webapp_mariadb` only resolves inside the Docker network.
 
-### 5. Build the front end
+### Front end
 
-The build produces the panel assets (`public/build`) and the widget (`public/widget.js`). The project `.npmrc` sets `ignore-scripts=true`.
+The build produces the panel assets (`public/build`) and the widget (`public/widget.js`). The project `.npmrc` sets `ignore-scripts=true`. `composer setup` already runs `pnpm install` and `pnpm build`. To rebuild:
 
 ```sh
-docker compose exec webapp pnpm install
 docker compose exec webapp pnpm build
 ```
 
@@ -113,7 +133,7 @@ Scripts in `package.json`:
 
 `public/widget.js` is in `.gitignore`. It is a build artifact, so generate it after cloning and whenever you change `resources/widget`.
 
-### 6. Open it
+### Open it
 
 | What | Address |
 | --- | --- |
@@ -179,8 +199,10 @@ Processes the app needs for full functionality (the same ones supervisor runs in
 ## Tests
 
 ```sh
-docker compose exec webapp composer test
+make test
 ```
+
+This is the same as `docker compose exec webapp composer test`.
 
 The script clears the config cache and runs `php artisan test`. In `phpunit.xml` the tests use in-memory SQLite, the `sync` queue, the `array` cache and a `null` broadcaster. There are `Unit` (`tests/Unit`) and `Feature` (`tests/Feature`) suites.
 

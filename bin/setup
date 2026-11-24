@@ -1,0 +1,498 @@
+#!/usr/bin/env bash
+#
+# Setup wizard for the Docker development stack.
+#
+#   bin/setup             create/complete .env, start the stack and prepare the app
+#   bin/setup --force     back up .env to .env.backup and recreate it from .env.example
+#   bin/setup --env-only  only create/complete .env (no Docker at all)
+#   bin/setup --up        start the stack, wait for MariaDB and print the URLs
+#
+# Compatible with bash 3.2 (macOS) and BSD userland.
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+ENV_EXAMPLE="$ROOT_DIR/.env.example"
+ENV_BACKUP="$ROOT_DIR/.env.backup"
+
+DB_SERVICE="webapp_mariadb"
+DB_VOLUME="webapp_mariadb"
+APP_SERVICE="webapp"
+DB_WAIT_SECONDS=120
+
+API_KEYS="OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GROQ_API_KEY DEEPSEEK_API_KEY"
+REVERB_SECRETS="REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET"
+
+FORCE=0
+MODE="full"
+DB_SECRETS_GENERATED=0
+DB_VOLUME_WARNED=0
+
+TMP_FILE=""
+cleanup() {
+    if [ -n "$TMP_FILE" ] && [ -f "$TMP_FILE" ]; then
+        rm -f "$TMP_FILE"
+    fi
+}
+trap cleanup EXIT
+
+# ---------------------------------------------------------------- output
+
+if [ -t 1 ]; then
+    C_BOLD=$'\033[1m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'; C_RESET=$'\033[0m'
+else
+    C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_RESET=""
+fi
+
+step() { printf '\n%s==> %s%s\n' "$C_BOLD" "$1" "$C_RESET"; }
+info() { printf '    %s\n' "$1"; }
+ok()   { printf '    %s%s%s\n' "$C_GREEN" "$1" "$C_RESET"; }
+warn() { printf '%sWarning:%s %s\n' "$C_YELLOW" "$C_RESET" "$1" >&2; }
+die()  { printf '%sError:%s %s\n' "$C_RED" "$C_RESET" "$1" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: bin/setup [--force] [--env-only] [--up]
+
+  --force     Back up .env to .env.backup and recreate it from .env.example.
+  --env-only  Only create and fill .env. Does not call Docker.
+  --up        Start the stack, wait for MariaDB and print the URLs.
+  -h, --help  Show this help.
+EOF
+}
+
+# Reads a y/N answer from stdin. Anything but y/yes (or EOF) means no.
+confirm() {
+    local answer=""
+    printf '%s [y/N] ' "$1"
+    if ! read -r answer; then
+        echo
+        return 1
+    fi
+    case "$answer" in
+        y|Y|yes|YES|Yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# ---------------------------------------------------------------- .env helpers
+
+# Prints the value of KEY from FILE (last uncommented assignment wins),
+# without surrounding quotes. Prints nothing if the key is missing.
+env_get() {
+    local key="$1" file="${2:-$ENV_FILE}"
+    K="$key" awk -v q="'" '
+        BEGIN { k = ENVIRON["K"]; found = 0 }
+        index($0, k "=") == 1 { v = substr($0, length(k) + 2); found = 1 }
+        END {
+            if (!found) exit
+            n = length(v)
+            if (n >= 2) {
+                f = substr(v, 1, 1); l = substr(v, n, 1)
+                if ((f == "\"" && l == "\"") || (f == q && l == q)) v = substr(v, 2, n - 2)
+            }
+            print v
+        }
+    ' "$file"
+}
+
+# True if KEY has an uncommented assignment in FILE.
+env_has() {
+    local key="$1" file="${2:-$ENV_FILE}"
+    K="$key" awk 'BEGIN { k = ENVIRON["K"]; r = 1 } index($0, k "=") == 1 { r = 0 } END { exit r }' "$file"
+}
+
+# Quotes a value for .env when it has characters dotenv parsers treat specially.
+# Single quotes are literal for both phpdotenv and docker compose.
+env_quote() {
+    local value="$1"
+    case "$value" in
+        *[!A-Za-z0-9_./:@+=,-]*) printf "'%s'" "$value" ;;
+        *) printf '%s' "$value" ;;
+    esac
+}
+
+# Sets KEY=VALUE in .env. Replaces every uncommented assignment; if there is
+# none, uncomments the first "# KEY=" line; otherwise appends at the end.
+# The value never goes through sed or shell interpolation: awk reads it from ENVIRON.
+env_set() {
+    local key="$1" value="$2" quoted
+    case "$key" in
+        *[!A-Za-z0-9_]*|"") die "invalid variable name: $key" ;;
+    esac
+    case "$value" in
+        *"'"*) die "$key: values with a single quote are not supported" ;;
+    esac
+    if [ "$(printf '%s' "$value" | wc -l | tr -d ' ')" != "0" ]; then
+        die "$key: multi-line values are not supported"
+    fi
+    quoted="$(env_quote "$value")"
+
+    TMP_FILE="$(mktemp "$ENV_FILE.XXXXXX")"
+    K="$key" V="$quoted" awk '
+        BEGIN { k = ENVIRON["K"]; line = k "=" ENVIRON["V"]; done = 0; n = 0 }
+        { lines[++n] = $0; if (index($0, k "=") == 1) has = 1 }
+        END {
+            for (i = 1; i <= n; i++) {
+                l = lines[i]
+                if (has && index(l, k "=") == 1) { print line; done = 1; continue }
+                if (!has && !done) {
+                    t = l
+                    sub(/^#[ \t]*/, "", t)
+                    if (t != l && index(t, k "=") == 1) { print line; done = 1; continue }
+                }
+                print l
+            }
+            if (!done) print line
+        }
+    ' "$ENV_FILE" > "$TMP_FILE"
+    # cat keeps the original file mode and inode.
+    cat "$TMP_FILE" > "$ENV_FILE"
+    rm -f "$TMP_FILE"
+    TMP_FILE=""
+}
+
+# Random alphanumeric string of the given length.
+random_alnum() {
+    local length="$1" out=""
+    while [ "${#out}" -lt "$length" ]; do
+        out="$out$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9')"
+    done
+    printf '%s' "${out:0:$length}"
+}
+
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+# ---------------------------------------------------------------- checks
+
+check_openssl() {
+    command -v openssl >/dev/null 2>&1 || die "openssl not found. Install it and run again."
+}
+
+check_docker() {
+    command -v docker >/dev/null 2>&1 || die "docker not found. Install Docker Desktop or Docker Engine."
+    docker compose version >/dev/null 2>&1 || die "docker compose (v2 plugin) not found."
+    docker info >/dev/null 2>&1 || die "Docker daemon is not responding. Start Docker and run again."
+}
+
+# Prints the real name of the MariaDB volume if it already exists. Prints nothing otherwise.
+existing_db_volume() {
+    local volumes config project found
+    # Capture first and filter after, so an early-exiting grep/awk never trips pipefail.
+    volumes="$(docker compose --project-directory "$ROOT_DIR" config --volumes 2>/dev/null || true)"
+    printf '%s\n' "$volumes" | grep -qx "$DB_VOLUME" || return 0
+    config="$(docker compose --project-directory "$ROOT_DIR" config 2>/dev/null || true)"
+    project="$(printf '%s\n' "$config" | awk '/^name:/ { print $2; exit }')"
+    [ -n "$project" ] || return 0
+    found="$(docker volume ls -q \
+        --filter "label=com.docker.compose.project=$project" \
+        --filter "label=com.docker.compose.volume=$DB_VOLUME" 2>/dev/null || true)"
+    printf '%s\n' "$found" | awk 'NF { print; exit }'
+}
+
+warn_old_db_volume() {
+    local volume
+    [ "$MODE" = "env-only" ] && return 0
+    volume="$(existing_db_volume)"
+    [ -n "$volume" ] || return 0
+    warn "MariaDB volume '$volume' already exists. It keeps the old DB passwords,
+         so the app will fail to connect with the new ones. Only 'make destroy'
+         fixes that (it deletes all volumes). Nothing was deleted."
+}
+
+# ---------------------------------------------------------------- steps
+
+prepare_env_file() {
+    step "Preparing .env"
+    [ -f "$ENV_EXAMPLE" ] || die ".env.example not found in $ROOT_DIR"
+
+    if [ "$FORCE" = "1" ] && [ -f "$ENV_FILE" ]; then
+        warn ".env will be recreated from .env.example. The current one goes to .env.backup."
+        if [ "$MODE" != "env-only" ]; then
+            # Check before confirming, so the warning is seen before deciding.
+            local volume
+            volume="$(existing_db_volume)"
+            if [ -n "$volume" ]; then
+                warn "MariaDB volume '$volume' exists and keeps the old DB passwords.
+         After this, run 'make destroy' and 'make setup' so the database is recreated.
+         Nothing is deleted by this script."
+                DB_VOLUME_WARNED=1
+            fi
+        fi
+        confirm "Recreate .env?" || die "aborted, .env left untouched."
+        cp -p "$ENV_FILE" "$ENV_BACKUP"
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
+        ok "Backup saved to .env.backup, .env recreated."
+    elif [ ! -f "$ENV_FILE" ]; then
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
+        ok "Created .env from .env.example."
+    else
+        info ".env already exists, keeping filled values."
+    fi
+}
+
+generate_secrets() {
+    step "Generating secrets"
+    local key value generated=0
+
+    # Every key whose value is a change-me* placeholder, as found in .env itself.
+    for key in $(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' "$ENV_FILE" | sort -u); do
+        value="$(env_get "$key")"
+        case "$value" in
+            change-me*)
+                env_set "$key" "$(random_alnum 32)"
+                info "$key generated"
+                generated=$((generated + 1))
+                case "$key" in DB_*) DB_SECRETS_GENERATED=1 ;; esac
+                ;;
+        esac
+    done
+
+    for key in $REVERB_SECRETS; do
+        value="$(env_get "$key")"
+        if [ -z "$value" ]; then
+            case "$key" in
+                REVERB_APP_ID) env_set "$key" "$(random_alnum 12)" ;;
+                REVERB_APP_KEY) env_set "$key" "$(random_alnum 32 | tr 'A-Z' 'a-z')" ;;
+                *) env_set "$key" "$(random_alnum 40)" ;;
+            esac
+            info "$key generated"
+            generated=$((generated + 1))
+        fi
+    done
+
+    if [ "$generated" = "0" ]; then
+        info "Nothing to generate, all secrets are already set."
+    fi
+}
+
+ask_api_keys() {
+    local key current state answer
+    step "LLM provider keys (Enter keeps the current value)"
+    for key in $API_KEYS; do
+        current="$(env_get "$key")"
+        if [ -n "$current" ]; then state="set"; else state="empty"; fi
+        printf '    %s [%s]: ' "$key" "$state"
+        answer=""
+        read -r -s answer || true
+        echo
+        answer="$(trim "$answer")"
+        if [ -n "$answer" ]; then
+            env_set "$key" "$answer"
+            ok "$key saved"
+        fi
+    done
+}
+
+valid_port() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+ask_port() {
+    local label="$1" current="$2" answer
+    while true; do
+        printf '    %s [%s]: ' "$label" "$current" >&2
+        answer=""
+        read -r answer || true
+        answer="$(trim "$answer")"
+        [ -n "$answer" ] || answer="$current"
+        if valid_port "$answer"; then
+            printf '%s' "$answer"
+            return 0
+        fi
+        printf '    Invalid port: %s\n' "$answer" >&2
+    done
+}
+
+# Rebuilds APP_URL with the same scheme and host and the new port.
+app_url_with_port() {
+    local url="$1" port="$2" scheme rest host
+    scheme="${url%%://*}"
+    [ "$scheme" != "$url" ] || scheme="http"
+    rest="${url#*://}"
+    rest="${rest%%/*}"
+    host="${rest%%:*}"
+    [ -n "$host" ] || host="localhost"
+    if { [ "$scheme" = "http" ] && [ "$port" = "80" ]; } || { [ "$scheme" = "https" ] && [ "$port" = "443" ]; }; then
+        printf '%s://%s' "$scheme" "$host"
+    else
+        printf '%s://%s:%s' "$scheme" "$host" "$port"
+    fi
+}
+
+ask_ports() {
+    local current port url reverb
+    step "Host ports (Enter keeps the current value)"
+
+    current="$(env_get APP_PORT)"
+    [ -n "$current" ] || current="8080"
+    port="$(ask_port "APP_PORT" "$current")"
+    url="$(env_get APP_URL)"
+    if [ "$port" != "$current" ] || ! env_has APP_PORT; then
+        env_set APP_PORT "$port"
+    fi
+    if [ "$(app_url_with_port "$url" "$port")" != "$url" ]; then
+        env_set APP_URL "$(app_url_with_port "$url" "$port")"
+        ok "APP_URL set to $(env_get APP_URL)"
+    fi
+
+    # Local dev needs REVERB_PORT = REVERB_SERVER_PORT = REVERB_EXPOSED_PORT (see .env.example).
+    current="$(env_get REVERB_EXPOSED_PORT)"
+    [ -n "$current" ] || current="$(env_get REVERB_PORT)"
+    [ -n "$current" ] || current="8090"
+    reverb="$(ask_port "Reverb port (REVERB_PORT, REVERB_SERVER_PORT, REVERB_EXPOSED_PORT)" "$current")"
+    if [ "$reverb" != "$(env_get REVERB_PORT)" ] \
+        || [ "$reverb" != "$(env_get REVERB_SERVER_PORT)" ] \
+        || [ "$reverb" != "$(env_get REVERB_EXPOSED_PORT)" ]; then
+        env_set REVERB_PORT "$reverb"
+        env_set REVERB_SERVER_PORT "$reverb"
+        env_set REVERB_EXPOSED_PORT "$reverb"
+        ok "Reverb port set to $reverb"
+    fi
+}
+
+interactive_questions() {
+    if [ ! -t 0 ]; then
+        info "stdin is not a terminal, skipping questions. Edit .env to add API keys."
+        return 0
+    fi
+    ask_api_keys
+    ask_ports
+}
+
+compose() {
+    docker compose --project-directory "$ROOT_DIR" "$@"
+}
+
+start_stack() {
+    step "Starting containers"
+    compose up -d --build
+}
+
+wait_for_db() {
+    local cid status="" elapsed=0
+    step "Waiting for MariaDB to be healthy (up to ${DB_WAIT_SECONDS}s)"
+    cid="$(compose ps -q "$DB_SERVICE")"
+    [ -n "$cid" ] || die "$DB_SERVICE container not found. Check 'docker compose ps'."
+    while [ "$elapsed" -lt "$DB_WAIT_SECONDS" ]; do
+        status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
+        if [ "$status" = "healthy" ]; then
+            ok "MariaDB is healthy."
+            return 0
+        fi
+        sleep 3
+        elapsed=$((elapsed + 3))
+    done
+    die "MariaDB is not healthy after ${DB_WAIT_SECONDS}s (status: ${status:-unknown}).
+       See 'docker compose logs $DB_SERVICE'. If the volume was created with other
+       passwords, 'make destroy' and 'make setup' recreate it (this deletes the data)."
+}
+
+prepare_app() {
+    step "Installing dependencies, migrating and building assets (composer setup)"
+    compose exec -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$APP_SERVICE" composer setup
+
+    step "Creating the Qdrant collection (knowledge:setup)"
+    compose exec "$APP_SERVICE" php artisan knowledge:setup
+
+    step "Restarting app processes (Horizon, Reverb, scheduler)"
+    if ! compose exec "$APP_SERVICE" supervisorctl restart all >/dev/null; then
+        warn "could not restart supervisor programs. Run 'docker compose restart $APP_SERVICE'."
+    fi
+}
+
+print_urls() {
+    local url
+    url="$(env_get APP_URL)"
+    [ -n "$url" ] || url="http://localhost:8080"
+    url="${url%/}"
+    step "Ready"
+    info "App:      $url"
+    info "Horizon:  $url/horizon"
+    info "Mailpit:  http://localhost:8025"
+}
+
+print_next_steps() {
+    local url
+    url="$(env_get APP_URL)"
+    url="${url%/}"
+    cat <<EOF
+
+Next steps:
+  1. Create your account at ${url:-http://localhost:8080}/register
+  2. Confirm the email in Mailpit (http://localhost:8025)
+  3. Create a chatbot, upload documents and copy the widget snippet
+
+  make up / make down     start or stop the stack
+  make logs s=webapp      follow logs of one service
+  make test               run the test suite
+EOF
+}
+
+# ---------------------------------------------------------------- main
+
+main() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --force) FORCE=1 ;;
+            --env-only) MODE="env-only" ;;
+            --up) MODE="up" ;;
+            -h|--help) usage; exit 0 ;;
+            *) usage >&2; die "unknown option: $1" ;;
+        esac
+        shift
+    done
+
+    cd "$ROOT_DIR"
+
+    if [ "$MODE" = "up" ]; then
+        [ -f "$ENV_FILE" ] || die ".env not found. Run 'make setup' first."
+        check_docker
+        start_stack
+        wait_for_db
+        print_urls
+        return 0
+    fi
+
+    step "Checking requirements"
+    check_openssl
+    if [ "$MODE" != "env-only" ]; then
+        check_docker
+    fi
+    ok "OK"
+
+    prepare_env_file
+    generate_secrets
+    interactive_questions
+
+    # New DB passwords while an old MariaDB volume exists means they will not match.
+    if [ "$DB_VOLUME_WARNED" = "0" ] && [ "$DB_SECRETS_GENERATED" = "1" ]; then
+        warn_old_db_volume
+    fi
+
+    if [ "$MODE" = "env-only" ]; then
+        step "Done"
+        info ".env is ready. Docker steps skipped (--env-only)."
+        return 0
+    fi
+
+    start_stack
+    wait_for_db
+    prepare_app
+    print_urls
+    print_next_steps
+}
+
+# Sourcing the file (for tests) loads the functions without running anything.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

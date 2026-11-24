@@ -22,6 +22,8 @@ abstract class HttpModelCatalog implements ModelCatalog
         protected readonly string $baseUrl,
         protected readonly int $timeout = 60,
         protected readonly int $connectTimeout = 5,
+        /** @var list<string> Case insensitive fragments of ids that are not chat models. */
+        protected readonly array $nonChatPatterns = [],
     ) {}
 
     /** @return array<string, string> */
@@ -53,7 +55,7 @@ abstract class HttpModelCatalog implements ModelCatalog
     }
 
     /**
-     * Keeps only ids the chatbot form would accept, without duplicates.
+     * Keeps only chat capable ids the chatbot form would accept, without duplicates.
      *
      * @param  array<int, mixed>  $ids
      * @return list<string>
@@ -62,12 +64,24 @@ abstract class HttpModelCatalog implements ModelCatalog
     {
         $valid = array_filter(
             $ids,
-            static fn (mixed $id): bool => is_string($id)
+            fn (mixed $id): bool => is_string($id)
                 && $id !== ''
                 && mb_strlen($id) <= ChatbotModel::MAX_LENGTH
-                && preg_match(ChatbotModel::BYOK_PATTERN, $id) === 1,
+                && preg_match(ChatbotModel::BYOK_PATTERN, $id) === 1
+                && ! $this->isNonChat($id),
         );
 
         return array_values(array_unique($valid));
+    }
+
+    private function isNonChat(string $id): bool
+    {
+        foreach ($this->nonChatPatterns as $pattern) {
+            if ($pattern !== '' && stripos($id, $pattern) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

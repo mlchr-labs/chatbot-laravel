@@ -69,6 +69,49 @@ class ModelCatalogTest extends TestCase
             && $r->header('Authorization') === ['Bearer '.self::KEY]);
     }
 
+    public function test_groq_listing_keeps_only_chat_models(): void
+    {
+        $ids = ['allam-2-7b', 'canopylabs/orpheus-arabic-saudi', 'canopylabs/orpheus-v1-english',
+            'meta-llama/llama-prompt-guard-2-22m', 'meta-llama/llama-prompt-guard-2-86m', 'openai/gpt-oss-120b',
+            'openai/gpt-oss-20b', 'openai/gpt-oss-safeguard-20b', 'qwen/qwen3.6-27b', 'qwen/qwen3.8-27b',
+            'whisper-large-v3', 'whisper-large-v3-turbo'];
+
+        Http::fake(['api.groq.com/*' => Http::response(['data' => array_map(fn ($id) => ['id' => $id], $ids)])]);
+
+        $this->assertSame(
+            ['allam-2-7b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'qwen/qwen3.8-27b'],
+            $this->catalog(LlmProvider::Groq)->models(),
+        );
+    }
+
+    public function test_non_chat_patterns_are_case_insensitive_and_configurable(): void
+    {
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [
+            ['id' => 'GPT-4o-Transcribe'], ['id' => 'text-embedding-3-small'], ['id' => 'dall-e-3'],
+            ['id' => 'gpt-4o-realtime-preview'], ['id' => 'gpt-image-1'], ['id' => 'gpt-chat'], ['id' => 'custom-x'],
+        ]])]);
+
+        $this->assertSame(['gpt-chat', 'custom-x'], $this->catalog(LlmProvider::OpenAi)->models());
+
+        config(['llm.non_chat_model_patterns' => ['CUSTOM']]);
+
+        $this->assertSame(
+            ['GPT-4o-Transcribe', 'text-embedding-3-small', 'dall-e-3', 'gpt-4o-realtime-preview', 'gpt-image-1', 'gpt-chat'],
+            $this->catalog(LlmProvider::OpenAi)->models(),
+        );
+    }
+
+    public function test_filter_applies_to_gemini_and_anthropic_too(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(['models' => [['name' => 'models/gemini-x'], ['name' => 'models/gemini-x-image']]]),
+            'api.anthropic.com/*' => Http::response(['data' => [['id' => 'claude-a'], ['id' => 'claude-audio']], 'has_more' => false]),
+        ]);
+
+        $this->assertSame(['gemini-x'], $this->catalog(LlmProvider::Gemini)->models());
+        $this->assertSame(['claude-a'], $this->catalog(LlmProvider::Anthropic)->models());
+    }
+
     public function test_openai_compatible_rejects_a_body_without_data(): void
     {
         Http::fake(['api.groq.com/*' => Http::response(['unexpected' => true])]);

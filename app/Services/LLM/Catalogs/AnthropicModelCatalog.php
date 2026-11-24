@@ -15,9 +15,10 @@ class AnthropicModelCatalog extends HttpModelCatalog
         string $baseUrl,
         int $timeout = 60,
         int $connectTimeout = 5,
+        array $nonChatPatterns = [],
         private readonly string $version = '2026-10-21',
     ) {
-        parent::__construct($apiKey, $baseUrl, $timeout, $connectTimeout);
+        parent::__construct($apiKey, $baseUrl, $timeout, $connectTimeout, $nonChatPatterns);
     }
 
     public function models(): array

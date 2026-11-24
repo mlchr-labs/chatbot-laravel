@@ -22,6 +22,7 @@ class ModelCatalogFactory
             'baseUrl' => (string) ($settings['base_url'] ?? ''),
             'timeout' => (int) $this->config->get('llm.timeout', 60),
             'connectTimeout' => (int) $this->config->get('llm.connect_timeout', 5),
+            'nonChatPatterns' => array_values(array_filter((array) $this->config->get('llm.non_chat_model_patterns', []), is_string(...))),
         ];
 
         return match ($provider) {

@@ -28,6 +28,7 @@ FORCE=0
 MODE="full"
 DB_SECRETS_GENERATED=0
 DB_VOLUME_WARNED=0
+KEEP_DB_CREDENTIALS=0
 
 TMP_FILE=""
 cleanup() {
@@ -206,6 +207,20 @@ warn_old_db_volume() {
          fixes that (it deletes all volumes). Nothing was deleted."
 }
 
+# MariaDB only applies the credentials when the volume is first created, so a
+# recreated .env must reuse them while that volume exists.
+DB_CREDENTIALS="DB_DATABASE DB_USERNAME DB_PASSWORD DB_ROOT_PASSWORD"
+
+carry_db_credentials() {
+    local source="$1" key value
+    for key in $DB_CREDENTIALS; do
+        value="$(env_get "$key" "$source")"
+        [ -n "$value" ] || continue
+        env_set "$key" "$value"
+    done
+    ok "DB credentials kept from .env.backup (the MariaDB volume still uses them)."
+}
+
 # ---------------------------------------------------------------- steps
 
 prepare_env_file() {
@@ -219,9 +234,10 @@ prepare_env_file() {
             local volume
             volume="$(existing_db_volume)"
             if [ -n "$volume" ]; then
-                warn "MariaDB volume '$volume' exists and keeps the old DB passwords.
-         After this, run 'make destroy' and 'make setup' so the database is recreated.
-         Nothing is deleted by this script."
+                info "MariaDB volume '$volume' exists. Its users were created with the current"
+                info "DB credentials, so they are kept in the new .env. For a fresh database,"
+                info "run 'make destroy' first (it deletes all volumes)."
+                KEEP_DB_CREDENTIALS=1
                 DB_VOLUME_WARNED=1
             fi
         fi
@@ -229,6 +245,9 @@ prepare_env_file() {
         cp -p "$ENV_FILE" "$ENV_BACKUP"
         cp "$ENV_EXAMPLE" "$ENV_FILE"
         ok "Backup saved to .env.backup, .env recreated."
+        if [ "$KEEP_DB_CREDENTIALS" = "1" ]; then
+            carry_db_credentials "$ENV_BACKUP"
+        fi
     elif [ ! -f "$ENV_FILE" ]; then
         cp "$ENV_EXAMPLE" "$ENV_FILE"
         ok "Created .env from .env.example."
@@ -520,6 +539,7 @@ wait_for_db() {
         status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
         if [ "$status" = "healthy" ]; then
             ok "MariaDB is healthy."
+            check_db_login
             return 0
         fi
         sleep 3
@@ -528,6 +548,29 @@ wait_for_db() {
     die "MariaDB is not healthy after ${DB_WAIT_SECONDS}s (status: ${status:-unknown}).
        See 'docker compose logs $DB_SERVICE'. If the volume was created with other
        passwords, 'make destroy' and 'make setup' recreate it (this deletes the data)."
+}
+
+# Logs in with the app credentials, so a volume created with other passwords
+# fails here with a clear message instead of in the middle of the migrations.
+check_db_login() {
+    local user password database
+    user="$(env_get DB_USERNAME)"
+    password="$(env_get DB_PASSWORD)"
+    database="$(env_get DB_DATABASE)"
+    if compose exec -T -e MYSQL_PWD="$password" "$DB_SERVICE" \
+        mariadb -u "$user" -e 'SELECT 1' "$database" >/dev/null 2>&1; then
+        ok "The app credentials can log in to MariaDB."
+        return 0
+    fi
+    local backup_hint=""
+    if [ -f "$ENV_BACKUP" ]; then
+        backup_hint="
+       If .env was recreated with FORCE=1, copy DB_PASSWORD and DB_ROOT_PASSWORD
+       back from .env.backup."
+    fi
+    die "MariaDB rejected the DB_USERNAME/DB_PASSWORD from .env. The volume was
+       created with other credentials and MariaDB does not change them later.${backup_hint}
+       Or run 'make destroy' and 'make setup' to recreate the database (deletes the data)."
 }
 
 prepare_app() {

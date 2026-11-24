@@ -73,7 +73,7 @@ make setup
 | `make test` | Runs `composer test` in the `webapp` container |
 | `make destroy` | Asks for confirmation and runs `docker compose down -v`, deleting the volumes (MariaDB data, Qdrant vectors, embeddings cache) |
 
-MariaDB only reads `DB_PASSWORD` and `DB_ROOT_PASSWORD` when its volume is created. If you recreate `.env` with `make setup FORCE=1` while the old volume exists, the database keeps the old passwords and the app cannot connect. In that case run `make destroy` and then `make setup`. The setup script warns about this but never deletes anything on its own.
+MariaDB only reads the `DB_*` credentials when its volume is created. So while that volume exists, `make setup FORCE=1` keeps `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` and `DB_ROOT_PASSWORD` from the old `.env` and regenerates the rest. For a fresh database with new credentials, run `make destroy` and then `make setup FORCE=1`. Before migrating, the setup logs in with the app credentials and stops with a clear message if MariaDB rejects them. The script never deletes anything on its own.
 
 ### Variables
 

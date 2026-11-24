@@ -38,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureWidgetRateLimiting();
         $this->configurePanelRateLimiting();
+        $this->configureSandboxRateLimiting();
     }
 
     private function configurePanelRateLimiting(): void
@@ -48,6 +49,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('provider-models', fn (Request $request) => Limit::perMinute((int) config('llm.models_per_minute_user'))
             ->by('user:'.($request->user()?->getAuthIdentifier() ?? IpHasher::hash($request->ip())))
             ->response(fn (Request $request, array $headers) => response()->json(['message' => 'Muitas consultas de modelos. Aguarde um instante e tente de novo.'], 429, $headers)));
+    }
+
+    private function configureSandboxRateLimiting(): void
+    {
+        RateLimiter::for('sandbox-page', fn (Request $request) => Limit::perMinute((int) config('widget.limits.sandbox_page_per_minute_ip'))
+            ->by('ip:'.IpHasher::hash($request->ip())));
     }
 
     private function configureWidgetRateLimiting(): void

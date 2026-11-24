@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\KnowledgeSourceStatus;
 use App\Enums\LlmProvider;
 use App\Http\Requests\StoreChatbotRequest;
+use App\Http\Requests\ToggleSandboxRequest;
 use App\Http\Requests\UpdateChatbotRequest;
 use App\Http\Resources\KnowledgeSourceResource;
 use App\Jobs\Knowledge\PurgeChatbotKnowledge;
@@ -72,7 +73,7 @@ class ChatbotController extends Controller
             'chatbot' => $chatbot,
             'conversations' => $conversations,
             'sources' => KnowledgeSourceResource::collection($sources)->resolve(),
-            'snippet' => '<script src="'.url('widget.js').'" data-chatbot="'.$chatbot->public_key.'" async></script>',
+            'snippet' => $chatbot->widgetSnippet(),
         ]);
     }
 
@@ -108,6 +109,16 @@ class ChatbotController extends Controller
         dispatch($purge);
 
         return redirect()->route('chatbots.index')->with('status', 'Chatbot excluído.');
+    }
+
+    public function toggleSandbox(ToggleSandboxRequest $request, Chatbot $chatbot): RedirectResponse
+    {
+        Gate::authorize('toggleSandbox', $chatbot);
+
+        $chatbot->forceFill(['sandbox_enabled' => $request->boolean('sandbox_enabled')])->save();
+
+        return redirect()->to(route('chatbots.show', $chatbot).'#widget')
+            ->with('status', $chatbot->sandbox_enabled ? 'Sandbox ativada.' : 'Sandbox desativada.');
     }
 
     public function rotateKey(Chatbot $chatbot): RedirectResponse

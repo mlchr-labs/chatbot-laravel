@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-// user_id, ulid and public_key are intentionally not fillable.
+// user_id, ulid, public_key and sandbox_enabled are intentionally not fillable
+// (the sandbox toggle has its own route, so the chatbot form cannot flip it).
 #[Fillable([
     'name', 'system_prompt', 'provider', 'model', 'api_key', 'temperature',
     'welcome_message', 'theme', 'allowed_domains', 'is_active',
@@ -41,6 +42,12 @@ class Chatbot extends Model
     public function rotatePublicKey(): void
     {
         $this->forceFill(['public_key' => static::generatePublicKey()])->save();
+    }
+
+    /** Embed snippet. Attributes are escaped, so the result is safe to print unescaped in a page. */
+    public function widgetSnippet(): string
+    {
+        return '<script src="'.e(url('widget.js')).'" data-chatbot="'.e($this->public_key).'" async></script>';
     }
 
     public function hasApiKey(): bool
@@ -72,6 +79,7 @@ class Chatbot extends Model
             'theme' => 'array',
             'allowed_domains' => 'array',
             'is_active' => 'boolean',
+            'sandbox_enabled' => 'boolean',
         ];
     }
 }

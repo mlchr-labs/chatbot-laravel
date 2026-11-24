@@ -45,6 +45,11 @@ class ChatbotPolicy
         return $this->owns($user, $chatbot);
     }
 
+    public function toggleSandbox(User $user, Chatbot $chatbot): Response
+    {
+        return $this->owns($user, $chatbot);
+    }
+
     private function owns(User $user, Chatbot $chatbot): Response
     {
         return $chatbot->user_id !== null && $chatbot->user_id === $user->id

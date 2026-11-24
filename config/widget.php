@@ -16,6 +16,7 @@ return [
 
     'limits' => [
         'config_per_minute_ip' => (int) env('WIDGET_LIMIT_CONFIG_PER_MINUTE_IP', 60),
+        'sandbox_page_per_minute_ip' => (int) env('WIDGET_LIMIT_SANDBOX_PAGE_PER_MINUTE_IP', 30),
         'sessions_per_minute_ip' => (int) env('WIDGET_LIMIT_SESSIONS_PER_MINUTE_IP', 20),
         'messages_per_minute_conversation' => (int) env('WIDGET_LIMIT_MESSAGES_PER_MINUTE_CONVERSATION', 10),
         'messages_per_minute_ip' => (int) env('WIDGET_LIMIT_MESSAGES_PER_MINUTE_IP', 30),

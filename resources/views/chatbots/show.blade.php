@@ -95,13 +95,40 @@
             <x-ui.card>
                 <x-slot:header>Domínios permitidos</x-slot:header>
                 @if (empty($chatbot->allowed_domains))
-                    <p class="text-sm text-gray-600">Nenhum domínio cadastrado: o widget fica bloqueado até você autorizar pelo menos um site. Adicione os sites autorizados na <a class="text-indigo-600 underline" href="{{ route('chatbots.edit', $chatbot) }}">edição do chatbot</a>.</p>
+                    <p class="text-sm text-gray-600">Nenhum domínio cadastrado: o widget fica bloqueado nos seus sites até você autorizar pelo menos um. A sandbox, quando ligada, funciona mesmo sem domínio. Adicione os sites autorizados na <a class="text-indigo-600 underline" href="{{ route('chatbots.edit', $chatbot) }}">edição do chatbot</a>.</p>
                 @else
                     <ul class="flex flex-wrap gap-2">
                         @foreach ($chatbot->allowed_domains as $domain)
                             <li><x-ui.badge color="indigo">{{ $domain }}</x-ui.badge></li>
                         @endforeach
                     </ul>
+                @endif
+            </x-ui.card>
+
+            <x-ui.card>
+                <x-slot:header>Sandbox</x-slot:header>
+                <x-ui.alert type="warning">
+                    Com a sandbox ligada, qualquer pessoa com o link pode conversar com o chatbot. Isso consome créditos do provedor e pode expor as respostas da base de conhecimento. Deixe ligada só enquanto estiver testando.
+                </x-ui.alert>
+                <p class="mt-4 text-sm text-gray-600">Uma página pública para testar o widget sem precisar de um site próprio.</p>
+                <form method="POST" action="{{ route('chatbots.sandbox.toggle', $chatbot) }}" class="mt-4">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="sandbox_enabled" value="{{ $chatbot->sandbox_enabled ? 0 : 1 }}">
+                    <x-ui.button variant="secondary">{{ $chatbot->sandbox_enabled ? 'Desligar sandbox' : 'Ligar sandbox' }}</x-ui.button>
+                </form>
+                @if ($chatbot->sandbox_enabled)
+                    @php($sandboxUrl = route('sandbox.show', $chatbot->public_key))
+                    <div class="mt-4 text-sm" x-data="{ url: @js($sandboxUrl), copied: false, copy() { navigator.clipboard.writeText(this.url).then(() => { this.copied = true; setTimeout(() => this.copied = false, 2000); }); } }">
+                        <code class="break-all rounded bg-gray-100 px-1.5 py-0.5">{{ $sandboxUrl }}</code>
+                        <div class="mt-3 flex flex-wrap gap-3">
+                            <x-ui.button :href="$sandboxUrl" target="_blank" rel="noopener noreferrer">Abrir sandbox</x-ui.button>
+                            <x-ui.button type="button" variant="secondary" @click="copy()">
+                                <span x-show="! copied">Copiar link</span>
+                                <span x-show="copied" x-cloak>Copiado!</span>
+                            </x-ui.button>
+                        </div>
+                    </div>
                 @endif
             </x-ui.card>
 

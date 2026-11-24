@@ -16,6 +16,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
 
     Route::resource('chatbots', ChatbotController::class);
+    Route::patch('chatbots/{chatbot}/sandbox', [ChatbotController::class, 'toggleSandbox'])->name('chatbots.sandbox.toggle');
     Route::post('chatbots/{chatbot}/rotate-key', [ChatbotController::class, 'rotateKey'])->name('chatbots.rotate-key');
 
     // Child models are resolved through the parent relation: a mismatch is a 404.

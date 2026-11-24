@@ -108,7 +108,7 @@ These only change the host side. Inside the Docker network the app keeps talking
 
 If you change the Reverb port in development, keep `REVERB_PORT`, `REVERB_SERVER_PORT` and `REVERB_EXPOSED_PORT` equal, as `.env.example` warns. If you change `APP_PORT`, update `APP_URL` too. The wizard does both for you.
 
-The embeddings service reads `CONTAINER_PLATFORM` (default `linux/amd64`) and `EMBEDDINGS_IMAGE` (default `ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`). Set them in `.env` if you need a different platform or image.
+The embeddings service reads `CONTAINER_PLATFORM` (default `linux/amd64`) and `EMBEDDINGS_IMAGE` (default `ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`). Set them in `.env` if you need a different platform or image. On Apple Silicon the image runs under amd64 emulation, which is slower and uses more memory. The server warms up with `EMBEDDINGS_MAX_BATCH_TOKENS` (default `2048`) to stay within the Docker VM memory, and it restarts on its own if it still gets killed.
 
 ### Manual setup
 
